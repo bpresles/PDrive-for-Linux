@@ -28,6 +28,13 @@ Contraintes à respecter dans toutes les évolutions (conditions de Proton pour 
 
 ## 1. Préparer la publication sur GitHub
 
+Dépôt : https://github.com/bpresles/PDrive-for-Linux (privé jusqu'à la fin de cette partie).
+
+### Avant le passage en public
+
+- [ ] Réécrire l'auteur des commits : ils portent une adresse professionnelle, alors que c'est un projet personnel. Utiliser `git filter-repo --mailmap`, puis forcer le push tant que le dépôt est privé. Configurer ensuite `git config user.email` dans ce dépôt.
+- [ ] Éventuellement, renommer la branche `master` en `main`.
+
 ### README
 
 - [ ] Présentation, avec la mention bien visible « client tiers non officiel, non affilié à Proton AG ».
@@ -58,7 +65,7 @@ Contraintes à respecter dans toutes les évolutions (conditions de Proton pour 
 
 ### Identifiant D-Bus définitif
 
-- [ ] Remplacer `io.github.pdrive.PDrive` par `io.github.<compte-github>.PDrive`. Fichiers concernés :
+- [ ] Remplacer `io.github.pdrive.PDrive` par `io.github.bpresles.PDrive` (dépôt `bpresles/PDrive-for-Linux`). Fichiers concernés :
   - `crates/pdrived/src/dbus.rs` : nom de bus, chemins d'objets, interface `…PDrive1` ;
   - `extension/pdrive-nautilus.c` ;
   - `packaging/io.github.pdrive.PDrive.ini`, à renommer.
