@@ -6,24 +6,13 @@
 //!
 //! Set PDPOC_VERBOSE=1 to log HTTP requests and SDK debug messages.
 
-mod api;
-mod auth;
-mod config;
-mod host;
-mod keys;
-mod session;
-
 use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
+use pdcore::config;
 use pdsdk::proto::{node::Kind, Node};
 use pdsdk::{ClientOptions, DriveClient};
-use reqwest::Method;
-
-use api::ApiClient;
-use host::AppHost;
-use keys::AccountKeys;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -66,44 +55,19 @@ async fn selftest() -> Result<()> {
 }
 
 async fn login() -> Result<()> {
-    println!("{}\n", config::THIRD_PARTY_NOTICE);
-    let api = ApiClient::new(None)?;
-    let session = auth::login_via_browser(&api).await?;
-    api.set_session(session).await?;
+    pdcore::login().await?;
     println!("Signed in. The session is stored in the Secret Service keyring.");
     Ok(())
 }
 
 async fn logout() -> Result<()> {
-    if let Some(session) = session::load().await? {
-        let api = ApiClient::new(Some(session))?;
-        let reply = api.send(Method::DELETE, &ApiClient::url("auth/v4"), &[], None).await?;
-        if !reply.status.is_success() {
-            eprintln!("Server-side revocation failed ({}); removing the local session anyway.", reply.status);
-        }
-    }
-    session::delete().await?;
+    pdcore::logout().await?;
     println!("Signed out.");
     Ok(())
 }
 
 async fn list(path: &str) -> Result<()> {
-    let verbose = std::env::var_os("PDPOC_VERBOSE").is_some();
-    let session = session::load().await?.context("not signed in: run `pdpoc login` first")?;
-    let key_password = session.key_password.clone();
-    let api = Arc::new(ApiClient::new(Some(session))?);
-
-    let keys = AccountKeys::load(&api, &key_password).await?;
-    if verbose {
-        for (email, count) in keys.summary() {
-            eprintln!("[keys] {email}: {count} unlocked key(s)");
-        }
-    }
-
-    pdsdk::set_crypto_library_dir(Path::new(pdsdk::DEFAULT_LIB_DIR));
-    let host = Arc::new(AppHost { api, keys, verbose });
-    let client = DriveClient::create(host, &format!("{}/", config::API_BASE_URL), ClientOptions::default()).await?;
-
+    let client = pdcore::connect(std::env::var_os("PDPOC_VERBOSE").is_some()).await?;
     let result = list_with(&client, path).await;
     client.free().await?;
     result

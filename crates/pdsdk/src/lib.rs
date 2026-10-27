@@ -401,6 +401,53 @@ impl DriveClient {
         call_collect(Payload::DriveClientEnumerateNodes(request)).await
     }
 
+    /// Downloads and decrypts a file revision to `path`.
+    pub async fn download_to_file(&self, revision_uid: &str, path: &std::path::Path) -> Result<()> {
+        let request = proto::DriveClientGetFileDownloaderRequest {
+            client_handle: self.handle,
+            revision_uid: revision_uid.to_owned(),
+            no_waiting: false,
+            cancellation_token_source_handle: 0,
+        };
+        let downloader: i64 = unpack(call(Payload::DriveClientGetFileDownloader(request)).await?)?;
+        let result = Self::run_download(downloader, path).await;
+        call(Payload::FileDownloaderFree(proto::FileDownloaderFreeRequest { file_downloader_handle: downloader })).await?;
+        result
+    }
+
+    async fn run_download(downloader: i64, path: &std::path::Path) -> Result<()> {
+        // Progress is reported with this bindings handle until the download completes, so it
+        // must outlive the request that starts the download: keep a clone until the end.
+        let (bindings, rx) = Bindings::new(None, None);
+        let request = proto::DownloadToFileRequest {
+            downloader_handle: downloader,
+            file_path: path.to_string_lossy().into_owned(),
+            progress_action: fn_ptr(on_item as *const ()),
+            cancellation_token_source_handle: 0,
+        };
+        let controller: i64 = unpack(invoke(Request { payload: Some(Payload::DownloadToFile(request)) }, bindings.clone(), rx).await?)?;
+        let completion = call(Payload::DownloadControllerAwaitCompletion(proto::DownloadControllerAwaitCompletionRequest {
+            download_controller_handle: controller,
+        }))
+        .await;
+        call(Payload::DownloadControllerFree(proto::DownloadControllerFreeRequest { download_controller_handle: controller })).await?;
+        drop(bindings);
+        completion.map(|_| ())
+    }
+
+    /// Events of a tree since `cursor`. Without a cursor, yields a single `CursorAdvanced` event
+    /// carrying the latest event ID, to start from.
+    pub async fn events(&self, tree_event_scope_id: &str, cursor: Option<String>) -> Result<Vec<proto::DriveEvent>> {
+        let request = proto::DriveClientEnumerateEventsRequest {
+            client_handle: self.handle,
+            tree_event_scope_id: tree_event_scope_id.to_owned(),
+            cursor_event_id: cursor,
+            yield_action: fn_ptr(on_item as *const ()),
+            cancellation_token_source_handle: 0,
+        };
+        call_collect(Payload::DriveClientEnumerateEvents(request)).await
+    }
+
     /// Releases the SDK client. Callbacks may still run until this returns.
     pub async fn free(mut self) -> Result<()> {
         call(Payload::DriveClientFree(proto::DriveClientFreeRequest { client_handle: self.handle })).await?;

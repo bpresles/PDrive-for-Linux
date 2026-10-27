@@ -21,7 +21,7 @@ pub fn pack(full_name: &str, message: &impl prost::Message) -> Any {
 
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct Request {
-    #[prost(oneof = "request::Payload", tags = "200, 1000, 1001, 1009, 1010, 1022")]
+    #[prost(oneof = "request::Payload", tags = "200, 1000, 1001, 1004, 1009, 1010, 1021, 1022, 1201, 1202, 1205, 1208")]
     pub payload: Option<request::Payload>,
 }
 
@@ -34,12 +34,24 @@ pub mod request {
         DriveClientCreate(super::DriveClientCreateRequest),
         #[prost(message, tag = "1001")]
         DriveClientFree(super::DriveClientFreeRequest),
+        #[prost(message, tag = "1004")]
+        DriveClientGetFileDownloader(super::DriveClientGetFileDownloaderRequest),
         #[prost(message, tag = "1009")]
         DriveClientEnumerateFolderChildren(super::DriveClientEnumerateFolderChildrenRequest),
         #[prost(message, tag = "1010")]
         DriveClientGetMyFilesFolder(super::DriveClientGetMyFilesFolderRequest),
+        #[prost(message, tag = "1021")]
+        DriveClientEnumerateEvents(super::DriveClientEnumerateEventsRequest),
         #[prost(message, tag = "1022")]
         DriveClientEnumerateNodes(super::DriveClientEnumerateNodesRequest),
+        #[prost(message, tag = "1201")]
+        DownloadToFile(super::DownloadToFileRequest),
+        #[prost(message, tag = "1202")]
+        FileDownloaderFree(super::FileDownloaderFreeRequest),
+        #[prost(message, tag = "1205")]
+        DownloadControllerAwaitCompletion(super::DownloadControllerAwaitCompletionRequest),
+        #[prost(message, tag = "1208")]
+        DownloadControllerFree(super::DownloadControllerFreeRequest),
     }
 }
 
@@ -338,6 +350,115 @@ pub struct DriveClientEnumerateNodesRequest {
     pub cancellation_token_source_handle: i64,
 }
 
+// --- Downloads ------------------------------------------------------------------------------
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct DriveClientGetFileDownloaderRequest {
+    #[prost(int64, tag = "1")]
+    pub client_handle: i64,
+    #[prost(string, tag = "2")]
+    pub revision_uid: String,
+    #[prost(bool, tag = "3")]
+    pub no_waiting: bool,
+    #[prost(int64, tag = "4")]
+    pub cancellation_token_source_handle: i64,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct DownloadToFileRequest {
+    #[prost(int64, tag = "1")]
+    pub downloader_handle: i64,
+    #[prost(string, tag = "2")]
+    pub file_path: String,
+    #[prost(int64, tag = "3")]
+    pub progress_action: i64,
+    #[prost(int64, tag = "4")]
+    pub cancellation_token_source_handle: i64,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct FileDownloaderFreeRequest {
+    #[prost(int64, tag = "1")]
+    pub file_downloader_handle: i64,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct DownloadControllerAwaitCompletionRequest {
+    #[prost(int64, tag = "1")]
+    pub download_controller_handle: i64,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct DownloadControllerFreeRequest {
+    #[prost(int64, tag = "1")]
+    pub download_controller_handle: i64,
+}
+
+// --- Events -----------------------------------------------------------------------------------
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct DriveClientEnumerateEventsRequest {
+    #[prost(int64, tag = "1")]
+    pub client_handle: i64,
+    #[prost(string, tag = "2")]
+    pub tree_event_scope_id: String,
+    #[prost(string, optional, tag = "3")]
+    pub cursor_event_id: Option<String>,
+    #[prost(int64, tag = "4")]
+    pub yield_action: i64,
+    #[prost(int64, tag = "5")]
+    pub cancellation_token_source_handle: i64,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct DriveEvent {
+    #[prost(string, tag = "1")]
+    pub id: String,
+    #[prost(oneof = "drive_event::Event", tags = "2, 3, 4, 5, 6, 7")]
+    pub event: Option<drive_event::Event>,
+}
+
+pub mod drive_event {
+    #[derive(Clone, PartialEq, prost::Oneof)]
+    pub enum Event {
+        #[prost(message, tag = "2")]
+        NodeUpdated(super::NodeUpdatedEvent),
+        #[prost(message, tag = "3")]
+        NodeDeleted(super::NodeDeletedEvent),
+        #[prost(message, tag = "4")]
+        SharedWithMeUpdated(super::Empty),
+        #[prost(message, tag = "5")]
+        CursorAdvanced(super::Empty),
+        #[prost(message, tag = "6")]
+        ContinuityLost(super::Empty),
+        #[prost(message, tag = "7")]
+        ScopeAccessLost(super::Empty),
+    }
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct Empty {}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct NodeUpdatedEvent {
+    #[prost(string, tag = "1")]
+    pub node_uid: String,
+    #[prost(string, optional, tag = "2")]
+    pub parent_node_uid: Option<String>,
+    #[prost(bool, tag = "3")]
+    pub is_trashed: bool,
+    #[prost(bool, tag = "4")]
+    pub is_shared: bool,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct NodeDeletedEvent {
+    #[prost(string, tag = "1")]
+    pub node_uid: String,
+    #[prost(string, optional, tag = "2")]
+    pub parent_node_uid: Option<String>,
+}
+
 // --- Nodes ------------------------------------------------------------------------------------
 
 #[derive(Clone, PartialEq, prost::Message)]
@@ -417,6 +538,9 @@ pub struct FolderNode {
     pub uid: String,
     #[prost(string, optional, tag = "2")]
     pub parent_uid: Option<String>,
+    /// Scope to pass to the events API (the volume of the node).
+    #[prost(string, tag = "3")]
+    pub tree_event_scope_id: String,
     #[prost(message, optional, tag = "4")]
     pub name: Option<StringResult>,
     #[prost(message, optional, tag = "5")]

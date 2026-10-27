@@ -1,0 +1,15 @@
+[package]
+name = "pdfs"
+description = "Mounts Proton Drive as a FUSE file system"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+pdcore = { path = "../pdcore" }
+pdsdk = { path = "../pdsdk" }
+tokio.workspace = true
+anyhow.workspace = true
+fuser = { version = "0.18", default-features = false }
+libc = "0.2"
+sha2 = "0.10"

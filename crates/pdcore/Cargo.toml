@@ -1,0 +1,23 @@
+[package]
+name = "pdcore"
+description = "Account, session and SDK host shared by the client programs"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+pdsdk = { path = "../pdsdk" }
+prost.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+aes-gcm = "0.10"
+base64 = "0.22"
+oo7 = { version = "0.6", default-features = false, features = ["tokio", "native_crypto"] }
+percent-encoding = "2"
+proton-crypto = { version = "0.14", default-features = false, features = ["rustpgp"] }
+proton-crypto-account = { version = "0.20", default-features = false, features = ["rustpgp"] }
+rand = "0.9"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zeroize = "1"
