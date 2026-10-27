@@ -1,11 +1,12 @@
-//! Mounts "My files" read-only with FUSE (writes from other processes are refused).
+//! Mounts "My files" with FUSE.
 //!
 //!     pdfs MOUNTPOINT
 //!
 //! Folders are listed on demand (with their Proton thumbnails written to the desktop thumbnail
 //! cache), files are downloaded and decrypted on first open into
 //! `$XDG_CACHE_HOME/nautilus-drive-poc/content` and readable while downloading, and remote
-//! changes are applied from Drive events. Stop with Ctrl+C (or `fusermount3 -u MOUNTPOINT`). Set PDPOC_VERBOSE=1 for logs.
+//! changes are applied from Drive events. Writes are staged locally and uploaded once the
+//! file is closed (see `writes.rs`). Stop with Ctrl+C (or `fusermount3 -u MOUNTPOINT`). Set PDPOC_VERBOSE=1 for logs.
 
 mod content;
 mod drive;
@@ -14,6 +15,7 @@ mod replay;
 mod thumbnails;
 mod tree;
 mod watch;
+mod writes;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -25,6 +27,7 @@ use tokio::signal::unix::{signal, SignalKind};
 use content::ContentCache;
 use drive::Drive;
 use thumbnails::ThumbnailCache;
+use writes::Staging;
 use fs::DriveFs;
 
 #[tokio::main]
@@ -43,8 +46,11 @@ async fn main() -> Result<()> {
     let root = client.my_files_folder().await?;
     let scope = root.tree_event_scope_id.clone();
     let mountpoint = mountpoint.canonicalize().with_context(|| format!("cannot access {}", mountpoint.display()))?;
+    let staging_dir = cache_home.join("nautilus-drive-poc").join("staging");
+    std::fs::create_dir_all(&staging_dir).with_context(|| format!("cannot create {}", staging_dir.display()))?;
     let content = ContentCache::new(content_dir, tokio::runtime::Handle::current(), verbose);
-    let drive = Arc::new(Drive::new(client, root.uid, content, ThumbnailCache::new(&cache_home), mountpoint.clone(), verbose));
+    let staging = Staging::new(staging_dir);
+    let drive = Arc::new(Drive::new(client, root.uid, content, staging, ThumbnailCache::new(&cache_home), mountpoint.clone(), verbose));
 
     let mut config = Config::default();
     config.mount_options = vec![
@@ -59,7 +65,7 @@ async fn main() -> Result<()> {
     let mut unmounter = session.unmount_callable();
     // The session loop returns when the file system is unmounted, whoever unmounts it.
     let mut session_loop = tokio::task::spawn_blocking(move || session.run());
-    println!("Mounted on {} (read-only). Press Ctrl+C to unmount.", mountpoint.display());
+    println!("Mounted on {}. Press Ctrl+C to unmount.", mountpoint.display());
 
     let watcher = tokio::spawn(watch::run(drive.clone(), scope));
 

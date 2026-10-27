@@ -341,6 +341,15 @@ fn fn_ptr(f: *const ()) -> i64 {
     f as i64
 }
 
+/// Result of a batch operation on a single node.
+fn single_result(results: Vec<proto::NodeResultPair>) -> Result<()> {
+    match results.into_iter().next() {
+        Some(proto::NodeResultPair { error: Some(error), .. }) => Err(error.into()),
+        Some(_) => Ok(()),
+        None => Err(SdkError::Protocol("no result for the node".into())),
+    }
+}
+
 // --- Cancellation -----------------------------------------------------------------------------
 
 /// Cancels SDK operations it is passed to. Must be released with [`CancellationToken::free`].
@@ -483,6 +492,118 @@ impl DriveClient {
         call(Payload::DownloadControllerFree(proto::DownloadControllerFreeRequest { download_controller_handle: controller })).await?;
         drop(bindings);
         completion.map(|_| ())
+    }
+
+    /// Creates a folder and returns it.
+    pub async fn create_folder(&self, parent_folder_uid: &str, name: &str) -> Result<proto::FolderNode> {
+        let request = proto::DriveClientCreateFolderRequest {
+            client_handle: self.handle,
+            parent_folder_uid: parent_folder_uid.to_owned(),
+            folder_name: name.to_owned(),
+            last_modification_time: None,
+            cancellation_token_source_handle: 0,
+        };
+        // As for "My files", the folder comes wrapped in a `Node`.
+        let node: proto::Node = unpack(call(Payload::DriveClientCreateFolder(request)).await?)?;
+        match node.kind {
+            Some(proto::node::Kind::Folder(folder)) => Ok(folder),
+            _ => Err(SdkError::Protocol("created node is not a folder".into())),
+        }
+    }
+
+    /// Moves a node to the trash.
+    pub async fn trash(&self, node_uid: &str) -> Result<()> {
+        let request = proto::DriveClientTrashNodesRequest {
+            client_handle: self.handle,
+            node_uids: vec![node_uid.to_owned()],
+            cancellation_token_source_handle: 0,
+            yield_action: fn_ptr(on_item as *const ()),
+        };
+        single_result(call_collect(Payload::DriveClientTrashNodes(request)).await?)
+    }
+
+    /// Moves and/or renames a node (a rename is a move within the same folder).
+    pub async fn move_node(&self, item: proto::NodeMoveItem, target_parent_folder_uid: &str) -> Result<()> {
+        let request = proto::DriveClientMoveNodesRequest {
+            client_handle: self.handle,
+            items: vec![item],
+            target_parent_folder_uid: target_parent_folder_uid.to_owned(),
+            cancellation_token_source_handle: 0,
+            yield_action: fn_ptr(on_item as *const ()),
+        };
+        single_result(call_collect(Payload::DriveClientMoveNodes(request)).await?)
+    }
+
+    /// Uploads a local file as a new file of a folder.
+    pub async fn upload_new_file(
+        &self,
+        parent_folder_uid: &str,
+        name: &str,
+        media_type: &str,
+        path: &std::path::Path,
+        size: u64,
+        modification_time: Option<proto::Timestamp>,
+    ) -> Result<proto::UploadResult> {
+        let request = proto::DriveClientGetFileUploaderRequest {
+            client_handle: self.handle,
+            parent_folder_uid: parent_folder_uid.to_owned(),
+            name: name.to_owned(),
+            media_type: media_type.to_owned(),
+            size: size as i64,
+            last_modification_time: modification_time,
+            override_existing_draft_by_other_client: false,
+            no_waiting: false,
+            cancellation_token_source_handle: 0,
+        };
+        let uploader: i64 = unpack(call(Payload::DriveClientGetFileUploader(request)).await?)?;
+        Self::run_upload(uploader, path).await
+    }
+
+    /// Uploads a local file as a new revision of an existing file.
+    pub async fn upload_revision(
+        &self,
+        current_revision_uid: &str,
+        path: &std::path::Path,
+        size: u64,
+        modification_time: Option<proto::Timestamp>,
+    ) -> Result<proto::UploadResult> {
+        let request = proto::DriveClientGetFileRevisionUploaderRequest {
+            client_handle: self.handle,
+            current_active_revision_uid: current_revision_uid.to_owned(),
+            size: size as i64,
+            last_modification_time: modification_time,
+            no_waiting: false,
+            cancellation_token_source_handle: 0,
+        };
+        let uploader: i64 = unpack(call(Payload::DriveClientGetFileRevisionUploader(request)).await?)?;
+        Self::run_upload(uploader, path).await
+    }
+
+    async fn run_upload(uploader: i64, path: &std::path::Path) -> Result<proto::UploadResult> {
+        if uploader == 0 {
+            return Err(SdkError::Protocol("no uploader available".into()));
+        }
+        // Progress uses this bindings handle until completion: keep it alive until the end.
+        let (bindings, rx) = Bindings::new(None, None);
+        let request = proto::UploadFromFileRequest {
+            uploader_handle: uploader,
+            file_path: path.to_string_lossy().into_owned(),
+            progress_action: fn_ptr(on_item as *const ()),
+            cancellation_token_source_handle: 0,
+        };
+        let result = async {
+            let controller: i64 = unpack(invoke(Request { payload: Some(Payload::UploadFromFile(request)) }, bindings.clone(), rx).await?)?;
+            let completion = call(Payload::UploadControllerAwaitCompletion(proto::UploadControllerAwaitCompletionRequest {
+                upload_controller_handle: controller,
+            }))
+            .await;
+            call(Payload::UploadControllerFree(proto::UploadControllerFreeRequest { upload_controller_handle: controller })).await?;
+            unpack::<proto::UploadResult>(completion?)
+        }
+        .await;
+        drop(bindings);
+        call(Payload::FileUploaderFree(proto::FileUploaderFreeRequest { file_uploader_handle: uploader })).await?;
+        result
     }
 
     /// Decrypted thumbnails of files (JPEG data), for those that have one of this type.

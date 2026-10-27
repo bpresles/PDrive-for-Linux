@@ -99,6 +99,13 @@ impl ContentCache {
         self.path_for(revision_uid).exists()
     }
 
+    /// Takes a local file (e.g. just uploaded) as the complete content of a revision.
+    pub fn adopt(&self, revision_uid: &str, file: &std::path::Path) {
+        if std::fs::rename(file, self.path_for(revision_uid)).is_err() {
+            let _ = std::fs::remove_file(file);
+        }
+    }
+
     /// Whether the content or its head is available locally, or being downloaded.
     pub fn has_head(&self, revision_uid: &str) -> bool {
         let path = self.path_for(revision_uid);

@@ -11,6 +11,7 @@ use pdsdk::proto::{file_thumbnail, ThumbnailType};
 use crate::content::{ContentCache, Opened};
 use crate::replay::{self, Replay};
 use crate::thumbnails::ThumbnailCache;
+use crate::writes::Staging;
 use crate::tree::{EntryKind, Invalidation, NodeInfo, NodeKind, Tree};
 
 /// Fetching the thumbnails of a folder listing gives up after this delay.
@@ -30,6 +31,7 @@ pub struct Drive {
     pub client: Arc<DriveClient>,
     pub tree: Mutex<Tree>,
     pub content: Arc<ContentCache>,
+    pub staging: Staging,
     thumbnails: Arc<ThumbnailCache>,
     pub notifier: OnceLock<Notifier>,
     pub verbose: bool,
@@ -42,11 +44,20 @@ pub struct Drive {
 }
 
 impl Drive {
-    pub fn new(client: DriveClient, root_uid: String, content: ContentCache, thumbnails: ThumbnailCache, mountpoint: PathBuf, verbose: bool) -> Self {
+    pub fn new(
+        client: DriveClient,
+        root_uid: String,
+        content: ContentCache,
+        staging: Staging,
+        thumbnails: ThumbnailCache,
+        mountpoint: PathBuf,
+        verbose: bool,
+    ) -> Self {
         Self {
             client: Arc::new(client),
             tree: Mutex::new(Tree::new(root_uid)),
             content: Arc::new(content),
+            staging,
             thumbnails: Arc::new(thumbnails),
             notifier: OnceLock::new(),
             verbose,

@@ -21,7 +21,7 @@ pub fn pack(full_name: &str, message: &impl prost::Message) -> Any {
 
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct Request {
-    #[prost(oneof = "request::Payload", tags = "100, 101, 102, 200, 1000, 1001, 1004, 1009, 1010, 1015, 1021, 1022, 1200, 1202, 1205, 1208")]
+    #[prost(oneof = "request::Payload", tags = "100, 101, 102, 200, 1000, 1001, 1002, 1003, 1004, 1007, 1008, 1009, 1010, 1015, 1019, 1021, 1022, 1101, 1102, 1104, 1108, 1200, 1202, 1205, 1208")]
     pub payload: Option<request::Payload>,
 }
 
@@ -40,18 +40,36 @@ pub mod request {
         DriveClientCreate(super::DriveClientCreateRequest),
         #[prost(message, tag = "1001")]
         DriveClientFree(super::DriveClientFreeRequest),
+        #[prost(message, tag = "1002")]
+        DriveClientGetFileUploader(super::DriveClientGetFileUploaderRequest),
+        #[prost(message, tag = "1003")]
+        DriveClientGetFileRevisionUploader(super::DriveClientGetFileRevisionUploaderRequest),
         #[prost(message, tag = "1004")]
         DriveClientGetFileDownloader(super::DriveClientGetFileDownloaderRequest),
+        #[prost(message, tag = "1007")]
+        DriveClientCreateFolder(super::DriveClientCreateFolderRequest),
+        #[prost(message, tag = "1008")]
+        DriveClientTrashNodes(super::DriveClientTrashNodesRequest),
         #[prost(message, tag = "1009")]
         DriveClientEnumerateFolderChildren(super::DriveClientEnumerateFolderChildrenRequest),
         #[prost(message, tag = "1010")]
         DriveClientGetMyFilesFolder(super::DriveClientGetMyFilesFolderRequest),
         #[prost(message, tag = "1015")]
         DriveClientEnumerateThumbnails(super::DriveClientEnumerateThumbnailsRequest),
+        #[prost(message, tag = "1019")]
+        DriveClientMoveNodes(super::DriveClientMoveNodesRequest),
         #[prost(message, tag = "1021")]
         DriveClientEnumerateEvents(super::DriveClientEnumerateEventsRequest),
         #[prost(message, tag = "1022")]
         DriveClientEnumerateNodes(super::DriveClientEnumerateNodesRequest),
+        #[prost(message, tag = "1101")]
+        UploadFromFile(super::UploadFromFileRequest),
+        #[prost(message, tag = "1102")]
+        FileUploaderFree(super::FileUploaderFreeRequest),
+        #[prost(message, tag = "1104")]
+        UploadControllerAwaitCompletion(super::UploadControllerAwaitCompletionRequest),
+        #[prost(message, tag = "1108")]
+        UploadControllerFree(super::UploadControllerFreeRequest),
         #[prost(message, tag = "1200")]
         DownloadToStream(super::DownloadToStreamRequest),
         #[prost(message, tag = "1202")]
@@ -364,6 +382,145 @@ pub struct DriveClientEnumerateNodesRequest {
     pub yield_action: i64,
     #[prost(int64, tag = "4")]
     pub cancellation_token_source_handle: i64,
+}
+
+// --- Writes ---------------------------------------------------------------------------------
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct DriveClientCreateFolderRequest {
+    #[prost(int64, tag = "1")]
+    pub client_handle: i64,
+    #[prost(string, tag = "2")]
+    pub parent_folder_uid: String,
+    #[prost(string, tag = "3")]
+    pub folder_name: String,
+    #[prost(message, optional, tag = "4")]
+    pub last_modification_time: Option<Timestamp>,
+    #[prost(int64, tag = "5")]
+    pub cancellation_token_source_handle: i64,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct DriveClientTrashNodesRequest {
+    #[prost(int64, tag = "1")]
+    pub client_handle: i64,
+    #[prost(string, repeated, tag = "2")]
+    pub node_uids: Vec<String>,
+    #[prost(int64, tag = "3")]
+    pub cancellation_token_source_handle: i64,
+    #[prost(int64, tag = "4")]
+    pub yield_action: i64,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct NodeMoveItem {
+    #[prost(string, tag = "1")]
+    pub node_uid: String,
+    #[prost(string, tag = "2")]
+    pub current_parent_uid: String,
+    #[prost(string, tag = "3")]
+    pub current_name: String,
+    #[prost(string, tag = "4")]
+    pub target_name: String,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct DriveClientMoveNodesRequest {
+    #[prost(int64, tag = "1")]
+    pub client_handle: i64,
+    #[prost(message, repeated, tag = "2")]
+    pub items: Vec<NodeMoveItem>,
+    #[prost(string, tag = "3")]
+    pub target_parent_folder_uid: String,
+    #[prost(int64, tag = "4")]
+    pub cancellation_token_source_handle: i64,
+    #[prost(int64, tag = "5")]
+    pub yield_action: i64,
+}
+
+/// Outcome of a batch operation for one node.
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct NodeResultPair {
+    #[prost(string, tag = "1")]
+    pub node_uid: String,
+    #[prost(message, optional, tag = "2")]
+    pub error: Option<Error>,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct DriveClientGetFileUploaderRequest {
+    #[prost(int64, tag = "1")]
+    pub client_handle: i64,
+    #[prost(string, tag = "2")]
+    pub parent_folder_uid: String,
+    #[prost(string, tag = "3")]
+    pub name: String,
+    #[prost(string, tag = "4")]
+    pub media_type: String,
+    #[prost(int64, tag = "5")]
+    pub size: i64,
+    #[prost(message, optional, tag = "6")]
+    pub last_modification_time: Option<Timestamp>,
+    #[prost(bool, tag = "8")]
+    pub override_existing_draft_by_other_client: bool,
+    #[prost(bool, tag = "9")]
+    pub no_waiting: bool,
+    #[prost(int64, tag = "10")]
+    pub cancellation_token_source_handle: i64,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct DriveClientGetFileRevisionUploaderRequest {
+    #[prost(int64, tag = "1")]
+    pub client_handle: i64,
+    #[prost(string, tag = "2")]
+    pub current_active_revision_uid: String,
+    #[prost(int64, tag = "3")]
+    pub size: i64,
+    #[prost(message, optional, tag = "4")]
+    pub last_modification_time: Option<Timestamp>,
+    #[prost(bool, tag = "6")]
+    pub no_waiting: bool,
+    #[prost(int64, tag = "7")]
+    pub cancellation_token_source_handle: i64,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct UploadFromFileRequest {
+    #[prost(int64, tag = "1")]
+    pub uploader_handle: i64,
+    #[prost(string, tag = "3")]
+    pub file_path: String,
+    #[prost(int64, tag = "4")]
+    pub progress_action: i64,
+    #[prost(int64, tag = "5")]
+    pub cancellation_token_source_handle: i64,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct FileUploaderFreeRequest {
+    #[prost(int64, tag = "1")]
+    pub file_uploader_handle: i64,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct UploadControllerAwaitCompletionRequest {
+    #[prost(int64, tag = "1")]
+    pub upload_controller_handle: i64,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct UploadControllerFreeRequest {
+    #[prost(int64, tag = "1")]
+    pub upload_controller_handle: i64,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct UploadResult {
+    #[prost(string, tag = "1")]
+    pub node_uid: String,
+    #[prost(string, tag = "2")]
+    pub revision_uid: String,
 }
 
 // --- Downloads ------------------------------------------------------------------------------

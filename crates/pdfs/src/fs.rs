@@ -3,9 +3,9 @@
 //! Callbacks that may hit the network run on the Tokio runtime and reply from there, so the
 //! FUSE thread is never blocked by a download or a folder listing.
 //!
-//! Mutating callbacks are refused, except when this process itself replays a remote change
-//! through the mount (see `watch.rs`): going through the VFS is what makes the kernel emit the
-//! inotify events that file managers rely on.
+//! Mutating callbacks are forwarded to `writes.rs`, except when this process itself replays a
+//! remote change through the mount (see `replay.rs`): going through the VFS is what makes the
+//! kernel emit the inotify events that file managers rely on.
 
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -17,7 +17,8 @@ use std::time::{Duration, SystemTime};
 
 use fuser::{
     BsdFileFlags, Errno, FileAttr, FileHandle, FileType, Filesystem, FopenFlags, Generation, INodeNo, LockOwner, OpenAccMode,
-    OpenFlags, RenameFlags, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, Request, TimeOrNow,
+    OpenFlags, RenameFlags, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite, Request,
+    TimeOrNow, WriteFlags,
 };
 
 use crate::content::{Opened, Transfer};
@@ -37,8 +38,6 @@ struct Owner {
 impl Owner {
     fn attr(self, ino: u64, entry: &Entry) -> FileAttr {
         let (kind, perm, size, nlink) = match &entry.kind {
-            // Owner-writable so that the kernel lets this process replay remote changes;
-            // writes from other processes are refused with EROFS.
             EntryKind::Folder { .. } => (FileType::Directory, 0o755, 0, 2),
             EntryKind::File { size, .. } => (FileType::RegularFile, 0o644, *size, 1),
         };
@@ -68,6 +67,8 @@ enum Source {
     /// Only the beginning (`len` bytes) is cached; reading further starts the download.
     Head(Arc<File>, u64),
     Partial(Arc<File>, Arc<Transfer>),
+    /// The staging copy of a file being written.
+    Writable(Arc<File>),
 }
 
 impl From<Opened> for Source {
@@ -121,12 +122,39 @@ impl DriveFs {
     }
 
     fn reply_child_entry(&self, parent: INodeNo, name: &OsStr, reply: ReplyEntry) {
-        let tree = self.drive.tree();
-        match name.to_str().and_then(|name| tree.child(parent.0, name)) {
-            Some(ino) => reply.entry(&TTL, &self.owner.attr(ino, tree.get(ino).expect("child exists")), Generation(0)),
-            None => reply.error(Errno::EIO),
-        }
+        reply_entry(&self.drive, self.owner, parent.0, name, reply);
     }
+
+    fn add_open_file(&self, ino: u64, source: Source) -> u64 {
+        let handle = self.next_handle.fetch_add(1, Ordering::Relaxed);
+        self.files().insert(handle, Arc::new(OpenFile { ino, source: tokio::sync::Mutex::new(source) }));
+        handle
+    }
+}
+
+fn reply_entry(drive: &Drive, owner: Owner, parent: u64, name: &OsStr, reply: ReplyEntry) {
+    let tree = drive.tree();
+    match name.to_str().and_then(|name| tree.child(parent, name)) {
+        Some(ino) => reply.entry(&TTL, &owner.attr(ino, tree.get(ino).expect("child exists")), Generation(0)),
+        None => reply.error(Errno::EIO),
+    }
+}
+
+fn reply_attr(drive: &Drive, owner: Owner, ino: u64, reply: ReplyAttr) {
+    match drive.tree().get(ino) {
+        Some(entry) => reply.attr(&TTL, &owner.attr(ino, entry)),
+        None => reply.error(Errno::ENOENT),
+    }
+}
+
+/// Runs an async operation that only needs a success/error reply.
+fn reply_result(runtime: &tokio::runtime::Handle, reply: ReplyEmpty, operation: impl std::future::Future<Output = Result<(), Errno>> + Send + 'static) {
+    runtime.spawn(async move {
+        match operation.await {
+            Ok(()) => reply.ok(),
+            Err(e) => reply.error(e),
+        }
+    });
 }
 
 fn reply_read(file: &File, offset: u64, size: u32, reply: ReplyData) {
@@ -209,7 +237,27 @@ impl Filesystem for DriveFs {
 
     fn open(&self, req: &Request, ino: INodeNo, flags: OpenFlags, reply: ReplyOpen) {
         if flags.acc_mode() != OpenAccMode::O_RDONLY {
-            return reply.error(Errno::EROFS);
+            let truncate = flags.0 & libc::O_TRUNC != 0;
+            let (drive, open_files) = (self.drive.clone(), self.open_files.clone());
+            let handle = self.next_handle.fetch_add(1, Ordering::Relaxed);
+            self.runtime.spawn(async move {
+                match drive.open_write(ino.0, truncate).await {
+                    Ok(file) => {
+                        let source = tokio::sync::Mutex::new(Source::Writable(Arc::new(file)));
+                        open_files.lock().unwrap_or_else(|e| e.into_inner()).insert(handle, Arc::new(OpenFile { ino: ino.0, source }));
+                        reply.opened(FileHandle(handle), FopenFlags::empty());
+                    }
+                    Err(e) => reply.error(e),
+                }
+            });
+            return;
+        }
+        // Being written: read the staging copy (not a writer: closing it uploads nothing).
+        if let Some(path) = self.drive.staged_path(ino.0) {
+            return match File::open(path) {
+                Ok(file) => reply.opened(FileHandle(self.add_open_file(ino.0, Source::Complete(Arc::new(file)))), FopenFlags::empty()),
+                Err(e) => reply.error(e.into()),
+            };
         }
         if caller_name(req).is_some_and(|name| name.contains("thumb")) {
             match self.drive.file_revision(ino.0) {
@@ -264,7 +312,7 @@ impl Filesystem for DriveFs {
         // Fast path, served on the FUSE thread: the range is available locally.
         if let Ok(source) = open_file.source.try_lock() {
             match &*source {
-                Source::Complete(file) => return reply_read(file, offset, size, reply),
+                Source::Complete(file) | Source::Writable(file) => return reply_read(file, offset, size, reply),
                 Source::Head(file, len) if end <= *len => return reply_read(file, offset, size, reply),
                 _ => {}
             }
@@ -280,7 +328,7 @@ impl Filesystem for DriveFs {
                 }
             }
             let (file, transfer) = match &*source {
-                Source::Complete(file) | Source::Head(file, _) => (file.clone(), None),
+                Source::Complete(file) | Source::Head(file, _) | Source::Writable(file) => (file.clone(), None),
                 Source::Partial(file, transfer) => (file.clone(), Some(transfer.clone())),
             };
             drop(source);
@@ -303,14 +351,68 @@ impl Filesystem for DriveFs {
         reply: ReplyEmpty,
     ) {
         if let Some(open_file) = self.files().remove(&fh.0) {
-            let content = self.drive.content.clone();
+            let drive = self.drive.clone();
             self.runtime.spawn(async move {
-                if let Source::Partial(_, transfer) = &*open_file.source.lock().await {
-                    content.release(transfer.clone());
+                match &*open_file.source.lock().await {
+                    Source::Partial(_, transfer) => drive.content.release(transfer.clone()),
+                    Source::Writable(_) => drive.release_write(open_file.ino),
+                    _ => {}
                 }
             });
         }
         reply.ok();
+    }
+
+    fn write(
+        &self,
+        _req: &Request,
+        ino: INodeNo,
+        fh: FileHandle,
+        offset: u64,
+        data: &[u8],
+        _write_flags: WriteFlags,
+        _flags: OpenFlags,
+        _lock_owner: Option<LockOwner>,
+        reply: ReplyWrite,
+    ) {
+        let Some(open_file) = self.files().get(&fh.0).cloned() else { return reply.error(Errno::EBADF) };
+        let file = match &*open_file.source.blocking_lock() {
+            Source::Writable(file) => file.clone(),
+            _ => return reply.error(Errno::EBADF),
+        };
+        // Local write to the staging copy: fast enough to serve on the FUSE thread.
+        let result = file.write_all_at(data, offset).and_then(|()| file.metadata());
+        match result {
+            Ok(metadata) => {
+                self.drive.written(ino.0, metadata.len());
+                reply.written(data.len() as u32);
+            }
+            Err(e) => reply.error(e.into()),
+        }
+    }
+
+    fn flush(&self, _req: &Request, _ino: INodeNo, _fh: FileHandle, _lock_owner: LockOwner, reply: ReplyEmpty) {
+        reply.ok();
+    }
+
+    fn fsync(&self, _req: &Request, _ino: INodeNo, _fh: FileHandle, _datasync: bool, reply: ReplyEmpty) {
+        // Data is safe in the staging copy; it is uploaded once the file is closed.
+        reply.ok();
+    }
+
+    fn create(&self, _req: &Request, parent: INodeNo, name: &OsStr, _mode: u32, _umask: u32, _flags: i32, reply: ReplyCreate) {
+        let Some(name) = name.to_str() else { return reply.error(Errno::EINVAL) };
+        match self.drive.create_file(parent.0, name) {
+            Ok((ino, file)) => {
+                let attr = match self.drive.tree().get(ino) {
+                    Some(entry) => self.owner.attr(ino, entry),
+                    None => return reply.error(Errno::EIO),
+                };
+                let handle = self.add_open_file(ino, Source::Writable(Arc::new(file)));
+                reply.created(&TTL, &attr, Generation(0), FileHandle(handle), FopenFlags::empty());
+            }
+            Err(e) => reply.error(e),
+        }
     }
 
     fn setattr(
@@ -320,9 +422,9 @@ impl Filesystem for DriveFs {
         _mode: Option<u32>,
         _uid: Option<u32>,
         _gid: Option<u32>,
-        _size: Option<u64>,
+        size: Option<u64>,
         _atime: Option<TimeOrNow>,
-        _mtime: Option<TimeOrNow>,
+        mtime: Option<TimeOrNow>,
         _ctime: Option<SystemTime>,
         _fh: Option<FileHandle>,
         _crtime: Option<SystemTime>,
@@ -331,53 +433,103 @@ impl Filesystem for DriveFs {
         _flags: Option<BsdFileFlags>,
         reply: ReplyAttr,
     ) {
-        if !self.apply_replayed_change(req) {
-            return reply.error(Errno::EROFS);
+        if self.apply_replayed_change(req) {
+            return self.getattr(req, ino, None, reply);
         }
-        self.getattr(req, ino, None, reply);
+        // The modification time is only kept locally: it is sent with the next upload.
+        // Permissions and ownership are not stored by Proton Drive and are ignored.
+        if let Some(mtime) = mtime {
+            let time = match mtime {
+                TimeOrNow::SpecificTime(time) => time,
+                TimeOrNow::Now => SystemTime::now(),
+            };
+            self.drive.tree().set_mtime(ino.0, time);
+        }
+        let (drive, owner) = (self.drive.clone(), self.owner);
+        match size {
+            Some(size) => {
+                self.runtime.spawn(async move {
+                    match drive.truncate(ino.0, size).await {
+                        Ok(()) => reply_attr(&drive, owner, ino.0, reply),
+                        Err(e) => reply.error(e),
+                    }
+                });
+            }
+            None => reply_attr(&drive, owner, ino.0, reply),
+        }
     }
 
-    fn mknod(&self, req: &Request, parent: INodeNo, name: &OsStr, _mode: u32, _umask: u32, _rdev: u32, reply: ReplyEntry) {
-        if !self.apply_replayed_change(req) {
-            return reply.error(Errno::EROFS);
+    fn mknod(&self, req: &Request, parent: INodeNo, name: &OsStr, mode: u32, _umask: u32, _rdev: u32, reply: ReplyEntry) {
+        if self.apply_replayed_change(req) {
+            return self.reply_child_entry(parent, name, reply);
         }
-        self.reply_child_entry(parent, name, reply);
+        if mode & libc::S_IFMT != libc::S_IFREG {
+            return reply.error(Errno::EPERM);
+        }
+        let Some(name_str) = name.to_str() else { return reply.error(Errno::EINVAL) };
+        match self.drive.create_file(parent.0, name_str) {
+            Ok((ino, _file)) => {
+                let drive = self.drive.clone();
+                self.runtime.spawn(async move { drive.release_write(ino) });
+                self.reply_child_entry(parent, name, reply);
+            }
+            Err(e) => reply.error(e),
+        }
     }
 
     fn mkdir(&self, req: &Request, parent: INodeNo, name: &OsStr, _mode: u32, _umask: u32, reply: ReplyEntry) {
-        if !self.apply_replayed_change(req) {
-            return reply.error(Errno::EROFS);
+        if self.apply_replayed_change(req) {
+            return self.reply_child_entry(parent, name, reply);
         }
-        self.reply_child_entry(parent, name, reply);
+        let Some(name) = name.to_str().map(str::to_owned) else { return reply.error(Errno::EINVAL) };
+        let (drive, owner) = (self.drive.clone(), self.owner);
+        self.runtime.spawn(async move {
+            match drive.make_folder(parent.0, &name).await {
+                Ok(_) => reply_entry(&drive, owner, parent.0, name.as_ref(), reply),
+                Err(e) => reply.error(e),
+            }
+        });
     }
 
-    fn unlink(&self, req: &Request, _parent: INodeNo, _name: &OsStr, reply: ReplyEmpty) {
-        if !self.apply_replayed_change(req) {
-            return reply.error(Errno::EROFS);
+    fn unlink(&self, req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
+        if self.apply_replayed_change(req) {
+            return reply.ok();
         }
-        reply.ok();
+        let Some(name) = name.to_str().map(str::to_owned) else { return reply.error(Errno::ENOENT) };
+        let drive = self.drive.clone();
+        reply_result(&self.runtime, reply, async move { drive.remove(parent.0, &name, false).await });
     }
 
-    fn rmdir(&self, req: &Request, _parent: INodeNo, _name: &OsStr, reply: ReplyEmpty) {
-        if !self.apply_replayed_change(req) {
-            return reply.error(Errno::EROFS);
+    fn rmdir(&self, req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
+        if self.apply_replayed_change(req) {
+            return reply.ok();
         }
-        reply.ok();
+        let Some(name) = name.to_str().map(str::to_owned) else { return reply.error(Errno::ENOENT) };
+        let drive = self.drive.clone();
+        reply_result(&self.runtime, reply, async move { drive.remove(parent.0, &name, true).await });
     }
 
     fn rename(
         &self,
         req: &Request,
-        _parent: INodeNo,
-        _name: &OsStr,
-        _newparent: INodeNo,
-        _newname: &OsStr,
-        _flags: RenameFlags,
+        parent: INodeNo,
+        name: &OsStr,
+        newparent: INodeNo,
+        newname: &OsStr,
+        flags: RenameFlags,
         reply: ReplyEmpty,
     ) {
-        if !self.apply_replayed_change(req) {
-            return reply.error(Errno::EROFS);
+        if self.apply_replayed_change(req) {
+            return reply.ok();
         }
-        reply.ok();
+        if flags.intersects(RenameFlags::RENAME_EXCHANGE | RenameFlags::RENAME_WHITEOUT) {
+            return reply.error(Errno::EINVAL);
+        }
+        let (Some(name), Some(new_name)) = (name.to_str().map(str::to_owned), newname.to_str().map(str::to_owned)) else {
+            return reply.error(Errno::EINVAL);
+        };
+        let no_replace = flags.contains(RenameFlags::RENAME_NOREPLACE);
+        let drive = self.drive.clone();
+        reply_result(&self.runtime, reply, async move { drive.rename(parent.0, &name, newparent.0, &new_name, no_replace).await });
     }
 }

@@ -10,6 +10,13 @@ use pdsdk::proto::{node, Node, Timestamp};
 
 pub const ROOT_INO: u64 = 1;
 
+/// UID prefix of files created locally and not uploaded yet.
+const LOCAL_UID_PREFIX: &str = "local:";
+
+pub fn is_local(uid: &str) -> bool {
+    uid.starts_with(LOCAL_UID_PREFIX)
+}
+
 #[derive(Clone, PartialEq)]
 pub enum NodeKind {
     Folder,
@@ -156,6 +163,55 @@ impl Tree {
         }
     }
 
+    pub fn set_mtime(&mut self, ino: u64, mtime: SystemTime) {
+        if let Some(entry) = self.entries.get_mut(&ino) {
+            entry.mtime = mtime;
+        }
+    }
+
+    /// Adds an empty file created locally, not uploaded yet.
+    pub fn insert_local_file(&mut self, parent: u64, name: String, mtime: SystemTime) -> u64 {
+        let ino = self.next_ino;
+        self.next_ino += 1;
+        let uid = format!("{LOCAL_UID_PREFIX}{ino}");
+        let kind = EntryKind::File { size: 0, revision_uid: String::new(), has_thumbnail: false };
+        self.by_uid.insert(uid.clone(), ino);
+        self.entries.insert(ino, Entry { uid, parent, name, kind, mtime });
+        self.attach(parent, ino);
+        ino
+    }
+
+    /// Records the remote identity of a file after an upload.
+    pub fn set_uploaded(&mut self, ino: u64, uid: String, revision: String) {
+        let Some(entry) = self.entries.get_mut(&ino) else { return };
+        if entry.uid != uid {
+            self.by_uid.remove(&entry.uid);
+            self.by_uid.insert(uid.clone(), ino);
+            entry.uid = uid;
+        }
+        if let EntryKind::File { revision_uid, .. } = &mut entry.kind {
+            *revision_uid = revision;
+        }
+    }
+
+    /// Moves a node to another place. The target name must be free.
+    pub fn move_entry(&mut self, ino: u64, parent: u64, name: String) {
+        let Some(old_parent) = self.entries.get(&ino).map(|e| e.parent) else { return };
+        self.detach(old_parent, ino);
+        if let Some(entry) = self.entries.get_mut(&ino) {
+            entry.parent = parent;
+            entry.name = name;
+        }
+        self.attach(parent, ino);
+    }
+
+    /// Removes a node and its descendants.
+    pub fn remove_ino(&mut self, ino: u64) {
+        let Some(parent) = self.entries.get(&ino).map(|e| e.parent) else { return };
+        self.detach(parent, ino);
+        self.remove(ino);
+    }
+
     /// Replaces the listing of a folder.
     pub fn set_children(&mut self, parent: u64, nodes: Vec<NodeInfo>) {
         let previous = self.children(parent).map(<[u64]>::to_vec).unwrap_or_default();
@@ -169,9 +225,13 @@ impl Tree {
             let ino = self.insert_or_update(parent, node);
             children.push(ino);
         }
-        for gone in previous.into_iter().filter(|ino| !children.contains(ino)) {
-            if self.entries.get(&gone).is_some_and(|e| e.parent == parent) {
-                self.remove(gone);
+        let gone: Vec<u64> = previous.into_iter().filter(|ino| !children.contains(ino)).collect();
+        for gone in gone {
+            match self.entries.get(&gone) {
+                // Not uploaded yet: unknown remotely but still there.
+                Some(e) if e.parent == parent && is_local(&e.uid) => children.push(gone),
+                Some(e) if e.parent == parent => self.remove(gone),
+                _ => {}
             }
         }
         if let Some(Entry { kind: EntryKind::Folder { children: slot }, .. }) = self.entries.get_mut(&parent) {
