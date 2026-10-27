@@ -1,46 +1,58 @@
 //! State shared by the FUSE callbacks and the event watcher.
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, SystemTime};
 
 use fuser::{Errno, INodeNo, Notifier};
 use pdsdk::DriveClient;
+use pdsdk::proto::{file_thumbnail, ThumbnailType};
 
-use crate::tree::{EntryKind, Invalidation, NodeInfo, Tree};
+use crate::content::{ContentCache, Opened};
+use crate::replay::{self, Replay};
+use crate::thumbnails::ThumbnailCache;
+use crate::tree::{EntryKind, Invalidation, NodeInfo, NodeKind, Tree};
+
+/// Fetching the thumbnails of a folder listing gives up after this delay.
+const THUMBNAILS_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// A remote change waiting to be applied by the FUSE callback that the watcher triggers
 /// through the mount (so that the kernel emits inotify events for it).
 pub enum Change {
     Update { parent: u64, node: NodeInfo },
     Remove { uid: String },
+    /// Nothing changed in the tree, but the file manager must re-read the file information
+    /// (e.g. its thumbnail became available).
+    Refresh,
 }
 
 pub struct Drive {
-    pub client: DriveClient,
+    pub client: Arc<DriveClient>,
     pub tree: Mutex<Tree>,
-    /// Decrypted file contents, one file per revision.
-    content_dir: PathBuf,
-    downloads: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    pub content: Arc<ContentCache>,
+    thumbnails: Arc<ThumbnailCache>,
     pub notifier: OnceLock<Notifier>,
     pub verbose: bool,
     /// Absolute path of the mount point.
     pub mountpoint: std::path::PathBuf,
     pending: Mutex<Option<Change>>,
+    /// Serializes replays through the mount (see `replay.rs`).
+    pub replay_lock: tokio::sync::Mutex<()>,
     deferred: Mutex<Vec<Invalidation>>,
 }
 
 impl Drive {
-    pub fn new(client: DriveClient, root_uid: String, content_dir: PathBuf, mountpoint: PathBuf, verbose: bool) -> Self {
+    pub fn new(client: DriveClient, root_uid: String, content: ContentCache, thumbnails: ThumbnailCache, mountpoint: PathBuf, verbose: bool) -> Self {
         Self {
-            client,
+            client: Arc::new(client),
             tree: Mutex::new(Tree::new(root_uid)),
-            content_dir,
-            downloads: Mutex::new(HashMap::new()),
+            content: Arc::new(content),
+            thumbnails: Arc::new(thumbnails),
             notifier: OnceLock::new(),
             verbose,
             mountpoint,
             pending: Mutex::new(None),
+            replay_lock: tokio::sync::Mutex::new(()),
             deferred: Mutex::new(Vec::new()),
         }
     }
@@ -66,6 +78,7 @@ impl Drive {
         match change {
             Change::Update { parent, node } => tree.apply_update(parent, node),
             Change::Remove { uid } => tree.remove_uid(&uid),
+            Change::Refresh => Vec::new(),
         }
     }
 
@@ -86,7 +99,7 @@ impl Drive {
     }
 
     /// Makes sure the listing of a folder is loaded.
-    pub async fn load_children(&self, ino: u64) -> Result<(), Errno> {
+    pub async fn load_children(self: &Arc<Self>, ino: u64) -> Result<(), Errno> {
         let uid = {
             let tree = self.tree();
             let entry = tree.get(ino).ok_or(Errno::ENOENT)?;
@@ -100,42 +113,91 @@ impl Drive {
             eprintln!("cannot list folder {uid}: {e}");
             Errno::EIO
         })?;
-        let mut tree = self.tree();
-        // Another request may have loaded it meanwhile, or the folder may be gone.
-        if tree.get(ino).is_some() && !tree.is_loaded(ino) {
+        let with_thumbnails: Vec<NodeInfo> =
+            children.iter().filter(|n| matches!(n.kind, NodeKind::File { has_thumbnail: true, .. })).cloned().collect();
+        {
+            let mut tree = self.tree();
+            // Another request may have loaded it meanwhile, or the folder may be gone.
+            if tree.get(ino).is_none() || tree.is_loaded(ino) {
+                return Ok(());
+            }
             tree.set_children(ino, children);
         }
+        // In the background: the listing must not wait for thumbnails.
+        let drive = self.clone();
+        tokio::spawn(async move { drive.ensure_thumbnails(with_thumbnails).await });
         Ok(())
     }
 
-    /// Returns the local path of the decrypted content of a file, downloading it if needed.
-    pub async fn content_path(&self, ino: u64) -> Result<PathBuf, Errno> {
-        let revision_uid = match &self.tree().get(ino).ok_or(Errno::ENOENT)?.kind {
-            EntryKind::File { revision_uid, .. } => revision_uid.clone(),
-            EntryKind::Folder { .. } => return Err(Errno::EISDIR),
+    /// Writes the Proton thumbnails of these files into the desktop thumbnail cache, for those
+    /// that do not have a valid one yet, then makes the file manager re-read these files.
+    pub async fn ensure_thumbnails(self: &Arc<Self>, nodes: Vec<NodeInfo>) {
+        let missing: Vec<(String, PathBuf, SystemTime)> = {
+            let tree = self.tree();
+            nodes
+                .into_iter()
+                .filter_map(|n| {
+                    let path = tree.path_of(tree.ino_of(&n.uid)?)?;
+                    (!self.thumbnails.has_valid(&self.mountpoint.join(&path), n.mtime)).then_some((n.uid, path, n.mtime))
+                })
+                .collect()
         };
-        let path = self.content_dir.join(file_name_for(&revision_uid));
+        if missing.is_empty() {
+            return;
+        }
+        let uids = missing.iter().map(|(uid, ..)| uid.clone()).collect();
+        let thumbnails = match tokio::time::timeout(THUMBNAILS_TIMEOUT, self.client.thumbnails(uids, ThumbnailType::Thumbnail)).await {
+            Ok(Ok(thumbnails)) => thumbnails,
+            Ok(Err(e)) => return eprintln!("cannot fetch thumbnails: {e}"),
+            Err(_) => return eprintln!("fetching thumbnails timed out"),
+        };
+        let (cache, mountpoint) = (self.thumbnails.clone(), self.mountpoint.clone());
+        let written = tokio::task::spawn_blocking(move || {
+            let mut written = Vec::new();
+            for thumbnail in thumbnails {
+                let Some(file_thumbnail::Result::Data(data)) = thumbnail.result else { continue };
+                let Some((_, path, mtime)) = missing.iter().find(|(uid, ..)| *uid == thumbnail.file_uid) else { continue };
+                match cache.write(&mountpoint.join(path), *mtime, &data) {
+                    Ok(()) => written.push((path.clone(), *mtime)),
+                    Err(e) => eprintln!("cannot write the thumbnail of {}: {e:#}", path.display()),
+                }
+            }
+            written
+        })
+        .await
+        .unwrap_or_default();
+        if self.verbose {
+            eprintln!("[thumbnails] {} written", written.len());
+        }
+        // An attribute change (same timestamp) makes the file manager pick the thumbnail up.
+        for (path, mtime) in written {
+            replay::run(self, Change::Refresh, Replay::Touch(path, mtime)).await;
+        }
+    }
 
-        // One download per revision at a time; later openers wait for it.
-        let lock = self.downloads.lock().unwrap_or_else(|e| e.into_inner()).entry(revision_uid.clone()).or_default().clone();
-        let _guard = lock.lock().await;
-        if !path.exists() {
-            let partial = path.with_extension("part");
-            if self.verbose {
-                eprintln!("[download] {revision_uid}");
-            }
-            let result = self.client.download_to_file(&revision_uid, &partial).await;
-            if let Err(e) = result.and_then(|()| std::fs::rename(&partial, &path).map_err(|e| pdsdk::SdkError::Protocol(e.to_string()))) {
-                let _ = std::fs::remove_file(&partial);
-                eprintln!("cannot download revision {revision_uid}: {e}");
-                return Err(Errno::EIO);
-            }
+    /// Revision UID, size and whether Proton has a thumbnail, for a file.
+    pub fn file_revision(&self, ino: u64) -> Result<(String, u64, bool), Errno> {
+        match &self.tree().get(ino).ok_or(Errno::ENOENT)?.kind {
+            EntryKind::File { revision_uid, size, has_thumbnail } => Ok((revision_uid.clone(), *size, *has_thumbnail)),
+            EntryKind::Folder { .. } => Err(Errno::EISDIR),
         }
+    }
+
+    /// Opens the content of a file. Without `need_all`, the cached beginning of the file may be
+    /// returned; otherwise its download is started if it is not cached.
+    pub async fn open_content(self: &Arc<Self>, ino: u64, need_all: bool) -> Result<Opened, Errno> {
+        let (revision_uid, size, _) = self.file_revision(ino)?;
+        let drive = Arc::downgrade(self);
         // The real size can differ from the size claimed by the uploader.
-        if let Ok(metadata) = std::fs::metadata(&path) {
-            self.tree().set_file_size(ino, metadata.len());
-        }
-        Ok(path)
+        let on_complete = move |size| {
+            if let Some(drive) = drive.upgrade() {
+                drive.tree().set_file_size(ino, size);
+            }
+        };
+        self.content.open(self.client.clone(), &revision_uid, size, need_all, on_complete).await.map_err(|e| {
+            eprintln!("cannot open revision {revision_uid}: {e}");
+            Errno::EIO
+        })
     }
 
     /// Tells the kernel to drop stale cached entries.
@@ -151,8 +213,3 @@ impl Drive {
     }
 }
 
-/// Revision UIDs are longer than the 255-byte file name limit: name cache files by their hash.
-fn file_name_for(revision_uid: &str) -> String {
-    use sha2::Digest;
-    sha2::Sha256::digest(revision_uid.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
-}

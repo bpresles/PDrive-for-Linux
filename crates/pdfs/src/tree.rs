@@ -13,7 +13,7 @@ pub const ROOT_INO: u64 = 1;
 #[derive(Clone, PartialEq)]
 pub enum NodeKind {
     Folder,
-    File { size: u64, revision_uid: String },
+    File { size: u64, revision_uid: String, has_thumbnail: bool },
 }
 
 /// Decrypted metadata of a remote node.
@@ -55,6 +55,7 @@ impl NodeInfo {
                     parent_uid: Some(f.parent_uid).filter(|p| !p.is_empty()),
                     kind: NodeKind::File {
                         size: revision.claimed_size.unwrap_or(revision.storage_size).max(0) as u64,
+                        has_thumbnail: revision.thumbnails.iter().any(|t| t.r#type == pdsdk::proto::ThumbnailType::Thumbnail as i32),
                         revision_uid: revision.uid,
                     },
                     mtime: to_system_time(mtime),
@@ -78,7 +79,7 @@ fn to_system_time(t: Option<Timestamp>) -> SystemTime {
 pub enum EntryKind {
     /// `None` until the listing has been loaded.
     Folder { children: Option<Vec<u64>> },
-    File { size: u64, revision_uid: String },
+    File { size: u64, revision_uid: String, has_thumbnail: bool },
 }
 
 pub struct Entry {
@@ -254,7 +255,7 @@ impl Tree {
     fn insert_or_update(&mut self, parent: u64, node: NodeInfo) -> u64 {
         let kind = match node.kind {
             NodeKind::Folder => EntryKind::Folder { children: None },
-            NodeKind::File { size, revision_uid } => EntryKind::File { size, revision_uid },
+            NodeKind::File { size, revision_uid, has_thumbnail } => EntryKind::File { size, revision_uid, has_thumbnail },
         };
         if let Some(ino) = self.ino_of(&node.uid) {
             let entry = self.entries.get_mut(&ino).expect("indexed inode exists");

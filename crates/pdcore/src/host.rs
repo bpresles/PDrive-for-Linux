@@ -45,7 +45,7 @@ impl pdsdk::Host for AppHost {
 
     fn log(&self, event: proto::LogEvent) {
         // Microsoft.Extensions.Logging levels: 0 trace .. 5 critical.
-        if self.verbose || event.level >= 3 {
+        if event.level >= 3 || (self.verbose && event.level >= 2) {
             eprintln!("[sdk:{}] {}: {}", event.level, event.category_name, event.message);
         }
     }

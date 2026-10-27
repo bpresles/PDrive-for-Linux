@@ -13,3 +13,7 @@ anyhow.workspace = true
 fuser = { version = "0.18", default-features = false }
 libc = "0.2"
 sha2 = "0.10"
+glib = "0.22"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+md5 = { package = "md-5", version = "0.10" }
+png = "0.18"

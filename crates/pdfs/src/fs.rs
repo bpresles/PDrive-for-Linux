@@ -20,6 +20,7 @@ use fuser::{
     OpenFlags, RenameFlags, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, Request, TimeOrNow,
 };
 
+use crate::content::{Opened, Transfer};
 use crate::drive::Drive;
 use crate::tree::{Entry, EntryKind};
 
@@ -61,7 +62,35 @@ impl Owner {
     }
 }
 
-type OpenFiles = Arc<Mutex<HashMap<u64, File>>>;
+/// What an open file reads from.
+enum Source {
+    Complete(Arc<File>),
+    /// Only the beginning (`len` bytes) is cached; reading further starts the download.
+    Head(Arc<File>, u64),
+    Partial(Arc<File>, Arc<Transfer>),
+}
+
+impl From<Opened> for Source {
+    fn from(opened: Opened) -> Self {
+        match opened {
+            Opened::Complete(file) => Source::Complete(Arc::new(file)),
+            Opened::Head(file, len) => Source::Head(Arc::new(file), len),
+            Opened::Partial(file, transfer) => Source::Partial(Arc::new(file), transfer),
+        }
+    }
+}
+
+struct OpenFile {
+    ino: u64,
+    source: tokio::sync::Mutex<Source>,
+}
+
+type OpenFiles = Arc<Mutex<HashMap<u64, Arc<OpenFile>>>>;
+
+/// Thumbnailers may only trigger the download of files up to this size: for bigger ones they
+/// get EACCES (the file manager then shows an icon) unless the file is already cached. Files
+/// with a Proton thumbnail are refused to them too: that thumbnail is written to the cache.
+const THUMBNAILER_MAX_DOWNLOAD: u64 = 20 * 1024 * 1024;
 
 pub struct DriveFs {
     drive: Arc<Drive>,
@@ -82,7 +111,7 @@ impl DriveFs {
         }
     }
 
-    fn files(&self) -> std::sync::MutexGuard<'_, HashMap<u64, File>> {
+    fn files(&self) -> std::sync::MutexGuard<'_, HashMap<u64, Arc<OpenFile>>> {
         self.open_files.lock().unwrap_or_else(|e| e.into_inner())
     }
 
@@ -100,10 +129,34 @@ impl DriveFs {
     }
 }
 
-/// FUSE reports the thread ID of the caller: compare its thread group with this process.
+fn reply_read(file: &File, offset: u64, size: u32, reply: ReplyData) {
+    let mut buffer = vec![0u8; size as usize];
+    let mut filled = 0;
+    while filled < buffer.len() {
+        match file.read_at(&mut buffer[filled..], offset + filled as u64) {
+            Ok(0) => break,
+            Ok(n) => filled += n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => return reply.error(e.into()),
+        }
+    }
+    reply.data(&buffer[..filled]);
+}
+
+/// FUSE reports the thread ID of the caller: this is its process ID.
+fn caller_process(req: &Request) -> Option<u32> {
+    let status = std::fs::read_to_string(format!("/proc/{}/status", req.pid())).ok()?;
+    status.lines().find_map(|l| l.strip_prefix("Tgid:")).and_then(|v| v.trim().parse().ok())
+}
+
 fn from_this_process(req: &Request) -> bool {
-    let Ok(status) = std::fs::read_to_string(format!("/proc/{}/status", req.pid())) else { return false };
-    status.lines().find_map(|l| l.strip_prefix("Tgid:")).and_then(|v| v.trim().parse::<u32>().ok()) == Some(std::process::id())
+    caller_process(req) == Some(std::process::id())
+}
+
+/// Name of the calling process, e.g. a thumbnailer ("gdk-pixbuf-thum", "totem-video-thu"…).
+fn caller_name(req: &Request) -> Option<String> {
+    let pid = caller_process(req)?;
+    Some(std::fs::read_to_string(format!("/proc/{pid}/comm")).ok()?.trim_end().to_owned())
 }
 
 impl Filesystem for DriveFs {
@@ -154,25 +207,44 @@ impl Filesystem for DriveFs {
         });
     }
 
-    fn open(&self, _req: &Request, ino: INodeNo, flags: OpenFlags, reply: ReplyOpen) {
+    fn open(&self, req: &Request, ino: INodeNo, flags: OpenFlags, reply: ReplyOpen) {
         if flags.acc_mode() != OpenAccMode::O_RDONLY {
             return reply.error(Errno::EROFS);
+        }
+        if caller_name(req).is_some_and(|name| name.contains("thumb")) {
+            match self.drive.file_revision(ino.0) {
+                Ok((revision_uid, size, has_thumbnail))
+                    if has_thumbnail || (size > THUMBNAILER_MAX_DOWNLOAD && !self.drive.content.is_cached(&revision_uid)) =>
+                {
+                    return reply.error(Errno::EACCES);
+                }
+                Err(e) => return reply.error(e),
+                Ok(_) => {}
+            }
+        }
+        // GIO finds the type of files with an ambiguous name (e.g. *.png, also claimed by
+        // image/apng) by reading their first bytes, opened with O_NOATIME, one file after the
+        // other; if the open fails it keeps the type guessed from the name. Content is encrypted
+        // by blocks of up to 4 MiB, so sniffing an uncached file would download a whole block:
+        // refuse instead (EACCES, as GIO retries on EPERM).
+        if flags.0 & libc::O_NOATIME != 0 {
+            match self.drive.file_revision(ino.0) {
+                Ok((revision_uid, ..)) if !self.drive.content.has_head(&revision_uid) => return reply.error(Errno::EACCES),
+                Err(e) => return reply.error(e),
+                Ok(_) => {}
+            }
         }
         let handle = self.next_handle.fetch_add(1, Ordering::Relaxed);
         let (drive, open_files) = (self.drive.clone(), self.open_files.clone());
         self.runtime.spawn(async move {
-            let path = match drive.content_path(ino.0).await {
-                Ok(path) => path,
+            let source = match drive.open_content(ino.0, false).await {
+                Ok(opened) => Source::from(opened),
                 Err(e) => return reply.error(e),
             };
-            match File::open(&path) {
-                Ok(file) => {
-                    open_files.lock().unwrap_or_else(|e| e.into_inner()).insert(handle, file);
-                    // Content is per revision: a new revision invalidates the inode explicitly.
-                    reply.opened(FileHandle(handle), FopenFlags::FOPEN_KEEP_CACHE);
-                }
-                Err(e) => reply.error(e.into()),
-            }
+            let open_file = Arc::new(OpenFile { ino: ino.0, source: tokio::sync::Mutex::new(source) });
+            open_files.lock().unwrap_or_else(|e| e.into_inner()).insert(handle, open_file);
+            // Content is per revision: a new revision invalidates the inode explicitly.
+            reply.opened(FileHandle(handle), FopenFlags::FOPEN_KEEP_CACHE);
         });
     }
 
@@ -187,20 +259,37 @@ impl Filesystem for DriveFs {
         _lock_owner: Option<LockOwner>,
         reply: ReplyData,
     ) {
-        // Local reads from the content cache: fast enough to serve on the FUSE thread.
-        let files = self.files();
-        let Some(file) = files.get(&fh.0) else { return reply.error(Errno::EBADF) };
-        let mut buffer = vec![0u8; size as usize];
-        let mut filled = 0;
-        while filled < buffer.len() {
-            match file.read_at(&mut buffer[filled..], offset + filled as u64) {
-                Ok(0) => break,
-                Ok(n) => filled += n,
-                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
-                Err(e) => return reply.error(e.into()),
+        let Some(open_file) = self.files().get(&fh.0).cloned() else { return reply.error(Errno::EBADF) };
+        let end = offset + u64::from(size);
+        // Fast path, served on the FUSE thread: the range is available locally.
+        if let Ok(source) = open_file.source.try_lock() {
+            match &*source {
+                Source::Complete(file) => return reply_read(file, offset, size, reply),
+                Source::Head(file, len) if end <= *len => return reply_read(file, offset, size, reply),
+                _ => {}
             }
         }
-        reply.data(&buffer[..filled]);
+        let drive = self.drive.clone();
+        self.runtime.spawn(async move {
+            let mut source = open_file.source.lock().await;
+            // Reading past the cached beginning: download the whole content.
+            if matches!(&*source, Source::Head(_, len) if end > *len) {
+                match drive.open_content(open_file.ino, true).await {
+                    Ok(opened) => *source = Source::from(opened),
+                    Err(e) => return reply.error(e),
+                }
+            }
+            let (file, transfer) = match &*source {
+                Source::Complete(file) | Source::Head(file, _) => (file.clone(), None),
+                Source::Partial(file, transfer) => (file.clone(), Some(transfer.clone())),
+            };
+            drop(source);
+            if let Some(transfer) = transfer
+                && !transfer.wait_for(end).await {
+                    return reply.error(Errno::EIO);
+                }
+            reply_read(&file, offset, size, reply);
+        });
     }
 
     fn release(
@@ -213,7 +302,14 @@ impl Filesystem for DriveFs {
         _flush: bool,
         reply: ReplyEmpty,
     ) {
-        self.files().remove(&fh.0);
+        if let Some(open_file) = self.files().remove(&fh.0) {
+            let content = self.drive.content.clone();
+            self.runtime.spawn(async move {
+                if let Source::Partial(_, transfer) = &*open_file.source.lock().await {
+                    content.release(transfer.clone());
+                }
+            });
+        }
         reply.ok();
     }
 

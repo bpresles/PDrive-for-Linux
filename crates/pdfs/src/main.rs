@@ -2,12 +2,16 @@
 //!
 //!     pdfs MOUNTPOINT
 //!
-//! Folders are listed on demand, files are downloaded and decrypted on first open into
-//! `$XDG_CACHE_HOME/nautilus-drive-poc/content`, and remote changes are applied from Drive
-//! events. Stop with Ctrl+C (or `fusermount3 -u MOUNTPOINT`). Set PDPOC_VERBOSE=1 for logs.
+//! Folders are listed on demand (with their Proton thumbnails written to the desktop thumbnail
+//! cache), files are downloaded and decrypted on first open into
+//! `$XDG_CACHE_HOME/nautilus-drive-poc/content` and readable while downloading, and remote
+//! changes are applied from Drive events. Stop with Ctrl+C (or `fusermount3 -u MOUNTPOINT`). Set PDPOC_VERBOSE=1 for logs.
 
+mod content;
 mod drive;
 mod fs;
+mod replay;
+mod thumbnails;
 mod tree;
 mod watch;
 
@@ -18,7 +22,9 @@ use anyhow::{Context, Result};
 use fuser::{Config, MountOption};
 use tokio::signal::unix::{signal, SignalKind};
 
+use content::ContentCache;
 use drive::Drive;
+use thumbnails::ThumbnailCache;
 use fs::DriveFs;
 
 #[tokio::main]
@@ -29,14 +35,16 @@ async fn main() -> Result<()> {
     };
     let verbose = std::env::var_os("PDPOC_VERBOSE").is_some();
 
-    let content_dir = cache_dir()?.join("content");
+    let cache_home = cache_home()?;
+    let content_dir = cache_home.join("nautilus-drive-poc").join("content");
     std::fs::create_dir_all(&content_dir).with_context(|| format!("cannot create {}", content_dir.display()))?;
 
     let client = pdcore::connect(verbose).await?;
     let root = client.my_files_folder().await?;
     let scope = root.tree_event_scope_id.clone();
     let mountpoint = mountpoint.canonicalize().with_context(|| format!("cannot access {}", mountpoint.display()))?;
-    let drive = Arc::new(Drive::new(client, root.uid, content_dir, mountpoint.clone(), verbose));
+    let content = ContentCache::new(content_dir, tokio::runtime::Handle::current(), verbose);
+    let drive = Arc::new(Drive::new(client, root.uid, content, ThumbnailCache::new(&cache_home), mountpoint.clone(), verbose));
 
     let mut config = Config::default();
     config.mount_options = vec![
@@ -76,10 +84,9 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn cache_dir() -> Result<PathBuf> {
-    let base = match std::env::var_os("XDG_CACHE_HOME") {
+fn cache_home() -> Result<PathBuf> {
+    Ok(match std::env::var_os("XDG_CACHE_HOME") {
         Some(dir) if !dir.is_empty() => PathBuf::from(dir),
         _ => PathBuf::from(std::env::var_os("HOME").context("HOME is not set")?).join(".cache"),
-    };
-    Ok(base.join("nautilus-drive-poc"))
+    })
 }

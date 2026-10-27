@@ -21,13 +21,19 @@ pub fn pack(full_name: &str, message: &impl prost::Message) -> Any {
 
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct Request {
-    #[prost(oneof = "request::Payload", tags = "200, 1000, 1001, 1004, 1009, 1010, 1021, 1022, 1201, 1202, 1205, 1208")]
+    #[prost(oneof = "request::Payload", tags = "100, 101, 102, 200, 1000, 1001, 1004, 1009, 1010, 1015, 1021, 1022, 1200, 1202, 1205, 1208")]
     pub payload: Option<request::Payload>,
 }
 
 pub mod request {
     #[derive(Clone, PartialEq, prost::Oneof)]
     pub enum Payload {
+        #[prost(message, tag = "100")]
+        CancellationTokenSourceCreate(super::Empty),
+        #[prost(message, tag = "101")]
+        CancellationTokenSourceCancel(super::CancellationTokenSourceRequest),
+        #[prost(message, tag = "102")]
+        CancellationTokenSourceFree(super::CancellationTokenSourceRequest),
         #[prost(message, tag = "200")]
         StreamRead(super::StreamReadRequest),
         #[prost(message, tag = "1000")]
@@ -40,12 +46,14 @@ pub mod request {
         DriveClientEnumerateFolderChildren(super::DriveClientEnumerateFolderChildrenRequest),
         #[prost(message, tag = "1010")]
         DriveClientGetMyFilesFolder(super::DriveClientGetMyFilesFolderRequest),
+        #[prost(message, tag = "1015")]
+        DriveClientEnumerateThumbnails(super::DriveClientEnumerateThumbnailsRequest),
         #[prost(message, tag = "1021")]
         DriveClientEnumerateEvents(super::DriveClientEnumerateEventsRequest),
         #[prost(message, tag = "1022")]
         DriveClientEnumerateNodes(super::DriveClientEnumerateNodesRequest),
-        #[prost(message, tag = "1201")]
-        DownloadToFile(super::DownloadToFileRequest),
+        #[prost(message, tag = "1200")]
+        DownloadToStream(super::DownloadToStreamRequest),
         #[prost(message, tag = "1202")]
         FileDownloaderFree(super::FileDownloaderFreeRequest),
         #[prost(message, tag = "1205")]
@@ -109,6 +117,14 @@ pub struct Error {
 pub struct RepeatedBytesValue {
     #[prost(bytes = "vec", repeated, tag = "1")]
     pub value: Vec<Vec<u8>>,
+}
+
+// --- Cancellation ---------------------------------------------------------------------------
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct CancellationTokenSourceRequest {
+    #[prost(int64, tag = "1")]
+    pub cancellation_token_source_handle: i64,
 }
 
 // --- Streams and logging ----------------------------------------------------------------------
@@ -365,11 +381,12 @@ pub struct DriveClientGetFileDownloaderRequest {
 }
 
 #[derive(Clone, PartialEq, prost::Message)]
-pub struct DownloadToFileRequest {
+pub struct DownloadToStreamRequest {
     #[prost(int64, tag = "1")]
     pub downloader_handle: i64,
-    #[prost(string, tag = "2")]
-    pub file_path: String,
+    /// `intptr_t write(intptr_t bindings_handle, ByteArray buffer, intptr_t sdk_handle)`
+    #[prost(int64, tag = "2")]
+    pub write_action: i64,
     #[prost(int64, tag = "3")]
     pub progress_action: i64,
     #[prost(int64, tag = "4")]
@@ -392,6 +409,58 @@ pub struct DownloadControllerAwaitCompletionRequest {
 pub struct DownloadControllerFreeRequest {
     #[prost(int64, tag = "1")]
     pub download_controller_handle: i64,
+}
+
+// --- Thumbnails -----------------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, prost::Enumeration)]
+#[repr(i32)]
+pub enum ThumbnailType {
+    Unspecified = 0,
+    /// Small thumbnail (up to 512 px).
+    Thumbnail = 1,
+    /// Larger preview.
+    Preview = 2,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct ThumbnailHeader {
+    #[prost(string, tag = "1")]
+    pub id: String,
+    #[prost(enumeration = "ThumbnailType", tag = "2")]
+    pub r#type: i32,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct DriveClientEnumerateThumbnailsRequest {
+    #[prost(int64, tag = "1")]
+    pub client_handle: i64,
+    #[prost(string, repeated, tag = "2")]
+    pub file_uids: Vec<String>,
+    #[prost(enumeration = "ThumbnailType", tag = "3")]
+    pub r#type: i32,
+    #[prost(int64, tag = "4")]
+    pub yield_action: i64,
+    #[prost(int64, tag = "5")]
+    pub cancellation_token_source_handle: i64,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct FileThumbnail {
+    #[prost(string, tag = "1")]
+    pub file_uid: String,
+    #[prost(oneof = "file_thumbnail::Result", tags = "2, 3")]
+    pub result: Option<file_thumbnail::Result>,
+}
+
+pub mod file_thumbnail {
+    #[derive(Clone, PartialEq, prost::Oneof)]
+    pub enum Result {
+        #[prost(bytes, tag = "2")]
+        Data(Vec<u8>),
+        #[prost(message, tag = "3")]
+        Error(super::DriveError),
+    }
 }
 
 // --- Events -----------------------------------------------------------------------------------
@@ -510,6 +579,8 @@ pub struct FileRevision {
     pub claimed_size: Option<i64>,
     #[prost(message, optional, tag = "6")]
     pub claimed_modification_time: Option<Timestamp>,
+    #[prost(message, repeated, tag = "7")]
+    pub thumbnails: Vec<ThumbnailHeader>,
 }
 
 #[derive(Clone, PartialEq, prost::Message)]

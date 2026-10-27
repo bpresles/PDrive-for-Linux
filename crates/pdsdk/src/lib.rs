@@ -125,17 +125,29 @@ struct HostContext {
     runtime: tokio::runtime::Handle,
 }
 
+/// Receives the bytes the SDK writes to a host stream.
+pub type StreamSink = Box<dyn FnMut(&[u8]) -> std::io::Result<()> + Send>;
+
 /// Target of a bindings handle.
 struct Bindings {
     response: Mutex<Option<oneshot::Sender<Vec<u8>>>>,
     items: Option<mpsc::UnboundedSender<Vec<u8>>>,
     host: Option<HostContext>,
+    sink: Option<Mutex<StreamSink>>,
 }
 
 impl Bindings {
     fn new(items: Option<mpsc::UnboundedSender<Vec<u8>>>, host: Option<HostContext>) -> (Arc<Self>, oneshot::Receiver<Vec<u8>>) {
+        Self::with_sink(items, host, None)
+    }
+
+    fn with_sink(
+        items: Option<mpsc::UnboundedSender<Vec<u8>>>,
+        host: Option<HostContext>,
+        sink: Option<StreamSink>,
+    ) -> (Arc<Self>, oneshot::Receiver<Vec<u8>>) {
         let (tx, rx) = oneshot::channel();
-        (Arc::new(Self { response: Mutex::new(Some(tx)), items, host }), rx)
+        (Arc::new(Self { response: Mutex::new(Some(tx)), items, host, sink: sink.map(Mutex::new) }), rx)
     }
 
     /// # Safety
@@ -217,6 +229,20 @@ extern "C" fn on_log(handle: isize, array: ByteArray) {
     if let (Some(ctx), Ok(event)) = (&bindings.host, proto::LogEvent::decode(unsafe { array.as_slice() })) {
         ctx.host.log(event);
     }
+}
+
+/// The SDK writes downloaded content. The buffer is only valid during this call.
+extern "C" fn on_stream_write(handle: isize, buffer: ByteArray, sdk_handle: isize) -> isize {
+    let bindings = unsafe { Bindings::from_handle(handle) };
+    let result = match &bindings.sink {
+        Some(sink) => (sink.lock().unwrap_or_else(|e| e.into_inner()))(unsafe { buffer.as_slice() }),
+        None => Err(std::io::Error::other("no stream sink for this request")),
+    };
+    match result {
+        Ok(()) => respond(sdk_handle, Response { result: None }),
+        Err(e) => respond_error(sdk_handle, ErrorDomain::FileSystem, e.to_string()),
+    }
+    0
 }
 
 /// Reads a request body from an SDK-owned stream.
@@ -315,6 +341,29 @@ fn fn_ptr(f: *const ()) -> i64 {
     f as i64
 }
 
+// --- Cancellation -----------------------------------------------------------------------------
+
+/// Cancels SDK operations it is passed to. Must be released with [`CancellationToken::free`].
+pub struct CancellationToken {
+    handle: i64,
+}
+
+impl CancellationToken {
+    pub async fn new() -> Result<Self> {
+        Ok(Self { handle: unpack(call(Payload::CancellationTokenSourceCreate(proto::Empty {})).await?)? })
+    }
+
+    pub async fn cancel(&self) -> Result<()> {
+        let request = proto::CancellationTokenSourceRequest { cancellation_token_source_handle: self.handle };
+        call(Payload::CancellationTokenSourceCancel(request)).await.map(|_| ())
+    }
+
+    pub async fn free(self) -> Result<()> {
+        let request = proto::CancellationTokenSourceRequest { cancellation_token_source_handle: self.handle };
+        call(Payload::CancellationTokenSourceFree(request)).await.map(|_| ())
+    }
+}
+
 // --- Drive client -----------------------------------------------------------------------------
 
 #[derive(Default)]
@@ -401,31 +450,32 @@ impl DriveClient {
         call_collect(Payload::DriveClientEnumerateNodes(request)).await
     }
 
-    /// Downloads and decrypts a file revision to `path`.
-    pub async fn download_to_file(&self, revision_uid: &str, path: &std::path::Path) -> Result<()> {
+    /// Downloads and decrypts a file revision, handing the content to `sink` in order.
+    pub async fn download(&self, revision_uid: &str, sink: StreamSink, cancellation: Option<&CancellationToken>) -> Result<()> {
+        let cancellation_token_source_handle = cancellation.map_or(0, |c| c.handle);
         let request = proto::DriveClientGetFileDownloaderRequest {
             client_handle: self.handle,
             revision_uid: revision_uid.to_owned(),
             no_waiting: false,
-            cancellation_token_source_handle: 0,
+            cancellation_token_source_handle,
         };
         let downloader: i64 = unpack(call(Payload::DriveClientGetFileDownloader(request)).await?)?;
-        let result = Self::run_download(downloader, path).await;
+        let result = Self::run_download(downloader, sink, cancellation_token_source_handle).await;
         call(Payload::FileDownloaderFree(proto::FileDownloaderFreeRequest { file_downloader_handle: downloader })).await?;
         result
     }
 
-    async fn run_download(downloader: i64, path: &std::path::Path) -> Result<()> {
-        // Progress is reported with this bindings handle until the download completes, so it
-        // must outlive the request that starts the download: keep a clone until the end.
-        let (bindings, rx) = Bindings::new(None, None);
-        let request = proto::DownloadToFileRequest {
+    async fn run_download(downloader: i64, sink: StreamSink, cancellation_token_source_handle: i64) -> Result<()> {
+        // Writes and progress use this bindings handle until the download completes, so it must
+        // outlive the request that starts the download: keep a clone until the end.
+        let (bindings, rx) = Bindings::with_sink(None, None, Some(sink));
+        let request = proto::DownloadToStreamRequest {
             downloader_handle: downloader,
-            file_path: path.to_string_lossy().into_owned(),
+            write_action: fn_ptr(on_stream_write as *const ()),
             progress_action: fn_ptr(on_item as *const ()),
-            cancellation_token_source_handle: 0,
+            cancellation_token_source_handle,
         };
-        let controller: i64 = unpack(invoke(Request { payload: Some(Payload::DownloadToFile(request)) }, bindings.clone(), rx).await?)?;
+        let controller: i64 = unpack(invoke(Request { payload: Some(Payload::DownloadToStream(request)) }, bindings.clone(), rx).await?)?;
         let completion = call(Payload::DownloadControllerAwaitCompletion(proto::DownloadControllerAwaitCompletionRequest {
             download_controller_handle: controller,
         }))
@@ -433,6 +483,21 @@ impl DriveClient {
         call(Payload::DownloadControllerFree(proto::DownloadControllerFreeRequest { download_controller_handle: controller })).await?;
         drop(bindings);
         completion.map(|_| ())
+    }
+
+    /// Decrypted thumbnails of files (JPEG data), for those that have one of this type.
+    pub async fn thumbnails(&self, file_uids: Vec<String>, kind: proto::ThumbnailType) -> Result<Vec<proto::FileThumbnail>> {
+        if file_uids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let request = proto::DriveClientEnumerateThumbnailsRequest {
+            client_handle: self.handle,
+            file_uids,
+            r#type: kind as i32,
+            yield_action: fn_ptr(on_item as *const ()),
+            cancellation_token_source_handle: 0,
+        };
+        call_collect(Payload::DriveClientEnumerateThumbnails(request)).await
     }
 
     /// Events of a tree since `cursor`. Without a cursor, yields a single `CursorAdvanced` event
