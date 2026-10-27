@@ -1,0 +1,16 @@
+[workspace]
+resolver = "3"
+members = ["crates/pdsdk", "crates/pdpoc"]
+# Upstream sources fetched by scripts/build-native.sh are built on their own.
+exclude = ["third_party"]
+
+[workspace.package]
+edition = "2024"
+license = "GPL-3.0-or-later"
+version = "0.1.0"
+
+[workspace.dependencies]
+prost = "0.14"
+prost-types = "0.14"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+anyhow = "1"

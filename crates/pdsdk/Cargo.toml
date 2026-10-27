@@ -1,0 +1,13 @@
+[package]
+name = "pdsdk"
+description = "Rust bindings to the Proton Drive SDK native library (C ABI + Protobuf)"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+links = "proton_drive_sdk"
+
+[dependencies]
+prost.workspace = true
+prost-types.workspace = true
+tokio.workspace = true
+thiserror = "2"
