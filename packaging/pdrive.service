@@ -1,12 +1,12 @@
 [Unit]
-Description=Proton Drive mount for GNOME Files (unofficial third-party client)
+Description=PDrive for Linux: Proton Drive mount for GNOME Files (unofficial third-party client)
 # The session is read from the Secret Service keyring of the graphical session.
 After=graphical-session.target
 PartOf=graphical-session.target
 
 [Service]
 Type=exec
-ExecStart=%h/.local/bin/pdfs
+ExecStart=%h/.local/bin/pdrived
 Restart=on-failure
 RestartSec=15
 

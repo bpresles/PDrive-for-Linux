@@ -2357,7 +2357,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "pdfs"
+name = "pdrive"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "pdcore",
+ "pdsdk",
+ "tokio",
+]
+
+[[package]]
+name = "pdrived"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2375,16 +2385,6 @@ dependencies = [
  "sha2",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
-]
-
-[[package]]
-name = "pdpoc"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "pdcore",
- "pdsdk",
- "tokio",
 ]
 
 [[package]]

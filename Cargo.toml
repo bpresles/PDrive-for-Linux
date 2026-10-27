@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/pdsdk", "crates/pdcore", "crates/pdpoc", "crates/pdfs"]
+members = ["crates/pdsdk", "crates/pdcore", "crates/pdrive", "crates/pdrived"]
 # Upstream sources fetched by scripts/build-native.sh are built on their own.
 exclude = ["third_party"]
 

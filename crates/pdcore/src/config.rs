@@ -1,6 +1,6 @@
 /// Honest client identification required by Proton for third-party applications:
 /// `external-drive-{name}@{semver}-{channel}`.
-pub const APP_VERSION: &str = concat!("external-drive-nautilus_poc@", env!("CARGO_PKG_VERSION"), "-alpha");
+pub const APP_VERSION: &str = concat!("external-drive-pdrive_for_linux@", env!("CARGO_PKG_VERSION"), "-alpha");
 
 /// Client ID used for the browser sign-in of third-party applications.
 pub const AUTH_CLIENT_ID: &str = "external-drive";

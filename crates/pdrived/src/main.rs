@@ -1,14 +1,14 @@
 //! Mounts "My files" with FUSE.
 //!
-//!     pdfs [MOUNTPOINT]
+//!     pdrived [MOUNTPOINT]
 //!
 //! The mount point defaults to the one of the settings (see `config.rs`). Folders are listed on
 //! demand (with their Proton thumbnails written to the desktop thumbnail cache), files are
-//! downloaded and decrypted on first open into `$XDG_CACHE_HOME/nautilus-drive-poc/content` and
+//! downloaded and decrypted on first open into `$XDG_CACHE_HOME/pdrive/content` and
 //! readable while downloading, and remote changes are applied from Drive events. Writes are
 //! staged locally and uploaded once the file is closed (see `writes.rs`); uploads interrupted by
 //! a stop are resumed at the next start. Stop with Ctrl+C, SIGTERM or `fusermount3 -u MOUNTPOINT`.
-//! Set PDPOC_VERBOSE=1 for logs.
+//! Set PDRIVE_VERBOSE=1 for logs.
 
 mod config;
 mod content;
@@ -39,12 +39,13 @@ const CACHE_PURGE_INTERVAL: Duration = Duration::from_secs(10 * 60);
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    config::migrate_legacy_dirs()?;
     let settings = Settings::load()?;
     let mountpoint = match std::env::args_os().nth(1) {
         Some(path) => PathBuf::from(path),
         None => config::expand_home(&settings.mountpoint)?,
     };
-    let verbose = std::env::var_os("PDPOC_VERBOSE").is_some();
+    let verbose = std::env::var_os("PDRIVE_VERBOSE").is_some();
 
     let cache_home = config::xdg_dir("XDG_CACHE_HOME", ".cache")?;
     let content_dir = cache_home.join(APP_DIR).join("content");
@@ -63,8 +64,8 @@ async fn main() -> Result<()> {
 
     let mut config = Config::default();
     config.mount_options = vec![
-        MountOption::FSName("drive-poc".into()),
-        MountOption::Subtype("pdfs".into()),
+        MountOption::FSName("pdrive".into()),
+        MountOption::Subtype("pdrive".into()),
         MountOption::NoAtime,
         MountOption::DefaultPermissions,
     ];

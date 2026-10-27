@@ -1,4 +1,4 @@
-//! Settings, from `$XDG_CONFIG_HOME/nautilus-drive-poc/config.toml`:
+//! Settings, from `$XDG_CONFIG_HOME/pdrive/config.toml`:
 //!
 //! ```toml
 //! # Where "My files" is mounted ("~" is the home folder).
@@ -12,7 +12,20 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-pub const APP_DIR: &str = "nautilus-drive-poc";
+pub const APP_DIR: &str = "pdrive";
+/// Directory name used before the project got its name.
+const LEGACY_APP_DIR: &str = "nautilus-drive-poc";
+
+/// Moves the settings and the cache (including pending uploads) from the legacy directories.
+pub fn migrate_legacy_dirs() -> Result<()> {
+    for base in [xdg_dir("XDG_CONFIG_HOME", ".config")?, xdg_dir("XDG_CACHE_HOME", ".cache")?] {
+        let (legacy, current) = (base.join(LEGACY_APP_DIR), base.join(APP_DIR));
+        if legacy.is_dir() && !current.exists() {
+            std::fs::rename(&legacy, &current).with_context(|| format!("cannot move {} to {}", legacy.display(), current.display()))?;
+        }
+    }
+    Ok(())
+}
 
 #[derive(Deserialize)]
 #[serde(default, deny_unknown_fields)]

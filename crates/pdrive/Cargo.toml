@@ -1,6 +1,6 @@
 [package]
-name = "pdpoc"
-description = "Proof of concept: browser login and folder listing through the Proton Drive SDK"
+name = "pdrive"
+description = "PDrive for Linux command-line tool: sign in, sign out, list folders"
 edition.workspace = true
 license.workspace = true
 version.workspace = true

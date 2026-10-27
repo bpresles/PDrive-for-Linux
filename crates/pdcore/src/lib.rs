@@ -41,7 +41,7 @@ pub async fn logout() -> Result<()> {
 
 /// Loads the stored session, unlocks the account keys and creates an SDK client.
 pub async fn connect(verbose: bool) -> Result<DriveClient> {
-    let session = session::load().await?.context("not signed in: run `pdpoc login` first")?;
+    let session = session::load().await?.context("not signed in: run `pdrive login` first")?;
     let key_password = session.key_password.clone();
     let api = Arc::new(ApiClient::new(Some(session))?);
 

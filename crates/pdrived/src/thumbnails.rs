@@ -84,7 +84,7 @@ fn write_png(path: &Path, image: &DynamicImage, uri: &str, mtime: SystemTime) ->
     encoder.set_depth(png::BitDepth::Eight);
     encoder.add_text_chunk("Thumb::URI".into(), uri.into())?;
     encoder.add_text_chunk("Thumb::MTime".into(), mtime_value(mtime))?;
-    encoder.add_text_chunk("Software".into(), "nautilus-drive-poc".into())?;
+    encoder.add_text_chunk("Software".into(), "pdrive".into())?;
     let mut writer = encoder.write_header()?;
     writer.write_image_data(rgba.as_raw())?;
     writer.finish()?;

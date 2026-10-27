@@ -1,10 +1,10 @@
-//! Proof of concept: Rust host for the Proton Drive SDK.
+//! PDrive for Linux command-line tool.
 //!
-//!     pdpoc login          sign in through the browser, store the session in the keyring
-//!     pdpoc ls [PATH]      list a folder of "My files" (e.g. `pdpoc ls Documents/Invoices`)
-//!     pdpoc logout         revoke the session and remove it from the keyring
+//!     pdrive login          sign in through the browser, store the session in the keyring
+//!     pdrive ls [PATH]      list a folder of "My files" (e.g. `pdrive ls Documents/Invoices`)
+//!     pdrive logout         revoke the session and remove it from the keyring
 //!
-//! Set PDPOC_VERBOSE=1 to log HTTP requests and SDK debug messages.
+//! Set PDRIVE_VERBOSE=1 to log HTTP requests and SDK debug messages.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
         Some("logout") => logout().await,
         Some("selftest") => selftest().await,
         _ => {
-            eprintln!("usage: pdpoc login | ls [PATH] | logout | selftest");
+            eprintln!("usage: pdrive login | ls [PATH] | logout | selftest");
             std::process::exit(2);
         }
     }
@@ -67,7 +67,7 @@ async fn logout() -> Result<()> {
 }
 
 async fn list(path: &str) -> Result<()> {
-    let client = pdcore::connect(std::env::var_os("PDPOC_VERBOSE").is_some()).await?;
+    let client = pdcore::connect(std::env::var_os("PDRIVE_VERBOSE").is_some()).await?;
     let result = list_with(&client, path).await;
     client.free().await?;
     result

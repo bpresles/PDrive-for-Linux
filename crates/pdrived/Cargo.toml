@@ -1,6 +1,6 @@
 [package]
-name = "pdfs"
-description = "Mounts Proton Drive as a FUSE file system"
+name = "pdrived"
+description = "PDrive for Linux daemon: mounts Proton Drive with FUSE"
 edition.workspace = true
 license.workspace = true
 version.workspace = true

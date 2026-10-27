@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 const ATTRIBUTE_APP: &str = "application";
-const APP_ID: &str = "nautilus-drive-poc";
+const APP_ID: &str = "pdrive";
+/// Identifier used before the project got its name: sessions stored under it are migrated.
+const LEGACY_APP_ID: &str = "nautilus-drive-poc";
 
 #[derive(Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct Session {
@@ -19,7 +21,11 @@ pub struct Session {
 }
 
 fn attributes() -> HashMap<&'static str, &'static str> {
-    HashMap::from([(ATTRIBUTE_APP, APP_ID)])
+    attributes_for(APP_ID)
+}
+
+fn attributes_for(app_id: &'static str) -> HashMap<&'static str, &'static str> {
+    HashMap::from([(ATTRIBUTE_APP, app_id)])
 }
 
 async fn keyring() -> Result<oo7::Keyring> {
@@ -29,11 +35,17 @@ async fn keyring() -> Result<oo7::Keyring> {
 pub async fn load() -> Result<Option<Session>> {
     let keyring = keyring().await?;
     keyring.unlock().await?;
-    let Some(item) = keyring.search_items(&attributes()).await?.into_iter().next() else {
+    if let Some(item) = keyring.search_items(&attributes()).await?.into_iter().next() {
+        let secret = item.secret().await?;
+        return Ok(Some(serde_json::from_slice(secret.as_bytes()).context("corrupted session in the keyring")?));
+    }
+    let Some(item) = keyring.search_items(&attributes_for(LEGACY_APP_ID)).await?.into_iter().next() else {
         return Ok(None);
     };
-    let secret = item.secret().await?;
-    Ok(Some(serde_json::from_slice(secret.as_bytes()).context("corrupted session in the keyring")?))
+    let session: Session = serde_json::from_slice(item.secret().await?.as_bytes()).context("corrupted session in the keyring")?;
+    save(&session).await?;
+    keyring.delete(&attributes_for(LEGACY_APP_ID)).await?;
+    Ok(Some(session))
 }
 
 pub async fn save(session: &Session) -> Result<()> {
@@ -41,7 +53,7 @@ pub async fn save(session: &Session) -> Result<()> {
     keyring.unlock().await?;
     let secret = zeroize::Zeroizing::new(serde_json::to_vec(session)?);
     keyring
-        .create_item("Proton Drive session (third-party Nautilus PoC)", &attributes(), secret.as_slice(), true)
+        .create_item("PDrive for Linux: Proton Drive session", &attributes(), secret.as_slice(), true)
         .await?;
     Ok(())
 }
