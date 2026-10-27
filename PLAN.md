@@ -32,7 +32,7 @@ Dépôt : https://github.com/bpresles/PDrive-for-Linux (privé jusqu'à la fin d
 
 ### Avant le passage en public
 
-- [ ] Réécrire l'auteur des commits : les premiers portent une adresse professionnelle, alors que c'est un projet personnel. Les remplacer par `bpresles@gmail.com` avec `git filter-repo --mailmap`, puis forcer le push tant que le dépôt est privé. L'adresse personnelle est déjà configurée localement (`git config user.email`) pour les nouveaux commits.
+- [x] Réécrire l'auteur des commits (fait le 27/10/2026) : les premiers portaient une adresse professionnelle, alors que c'est un projet personnel. Les remplacer par `bpresles@gmail.com` avec `git filter-repo --mailmap`, puis forcer le push tant que le dépôt est privé. L'adresse personnelle est déjà configurée localement (`git config user.email`) pour les nouveaux commits.
 - [ ] Éventuellement, renommer la branche `master` en `main`.
 
 ### README
