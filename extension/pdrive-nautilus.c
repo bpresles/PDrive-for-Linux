@@ -1,8 +1,9 @@
 /*
  * PDrive for Linux - Nautilus extension.
  *
- * Shows the sync state of the files of the PDrive mount as emblems, and adds "Keep Available
- * Offline" and "Free Up Space" to their context menu. All the work is done by the pdrived
+ * Shows the sync state of the files of the PDrive mount as emblems, adds "Keep Available
+ * Offline" and "Free Up Space" to their context menu, and reloads the windows when the drive is
+ * mounted. All the work is done by the pdrived
  * daemon, queried over D-Bus (io.github.pdrive.PDrive1): this extension runs inside Nautilus
  * and is kept minimal, asynchronous and passive when the daemon is not running.
  *
@@ -11,6 +12,7 @@
 
 #include <gio/gio.h>
 #include <gmodule.h>
+#include <gtk/gtk.h>
 #include <nautilus-extension.h>
 
 #define BUS_NAME "io.github.pdrive.PDrive"
@@ -32,6 +34,7 @@ static GType provider_types[1];
 static GDBusConnection *bus;
 static guint watch_id;
 static guint signal_id;
+static guint mount_signal_id;
 /* "file:///…/ProtonDrive/" while the daemon runs, NULL otherwise. */
 static char *mount_uri_prefix;
 
@@ -112,6 +115,42 @@ on_file_status_changed (GDBusConnection *connection,
     file = nautilus_file_info_lookup_for_uri (uri);
     if (file != NULL)
         nautilus_file_info_invalidate_extension_info (file);
+}
+
+/* Delay before reloading after a mount: Nautilus first processes the reappearance of the mount
+ * point folder (a "created" event for the folder itself). */
+#define RELOAD_DELAY_MS 600
+
+static gboolean
+reload_windows (gpointer user_data)
+{
+    GApplication *application = g_application_get_default ();
+
+    if (GTK_IS_APPLICATION (application))
+    {
+        for (GList *l = gtk_application_get_windows (GTK_APPLICATION (application)); l != NULL; l = l->next)
+            gtk_widget_activate_action (GTK_WIDGET (l->data), "slot.reload", NULL);
+    }
+    return G_SOURCE_REMOVE;
+}
+
+/* A mount over the mount point produces no file monitor event for its content, so the windows
+ * showing it are reloaded. An unmount needs nothing: Nautilus gets an "unmounted" event for the
+ * folder and leaves it by itself, which a reload would interfere with. */
+static void
+on_mount_state_changed (GDBusConnection *connection,
+                        const char      *sender,
+                        const char      *object_path,
+                        const char      *interface,
+                        const char      *signal,
+                        GVariant        *parameters,
+                        gpointer         user_data)
+{
+    gboolean mounted;
+
+    g_variant_get (parameters, "(b)", &mounted);
+    if (mounted)
+        g_timeout_add (RELOAD_DELAY_MS, reload_windows, NULL);
 }
 
 /* Info provider: emblems */
@@ -322,6 +361,9 @@ nautilus_module_initialize (GTypeModule *module)
     signal_id = g_dbus_connection_signal_subscribe (bus, BUS_NAME, INTERFACE, "FileStatusChanged",
                                                     OBJECT_PATH, NULL, G_DBUS_SIGNAL_FLAGS_NONE,
                                                     on_file_status_changed, NULL, NULL);
+    mount_signal_id = g_dbus_connection_signal_subscribe (bus, BUS_NAME, INTERFACE, "MountStateChanged",
+                                                          OBJECT_PATH, NULL, G_DBUS_SIGNAL_FLAGS_NONE,
+                                                          on_mount_state_changed, NULL, NULL);
 }
 
 G_MODULE_EXPORT void
@@ -330,6 +372,7 @@ nautilus_module_shutdown (void)
     if (bus != NULL)
     {
         g_dbus_connection_signal_unsubscribe (bus, signal_id);
+        g_dbus_connection_signal_unsubscribe (bus, mount_signal_id);
         g_bus_unwatch_name (watch_id);
         g_clear_object (&bus);
     }

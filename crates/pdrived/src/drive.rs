@@ -1,6 +1,7 @@
 //! State shared by the FUSE callbacks and the event watcher.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime};
 
@@ -37,7 +38,12 @@ pub struct Drive {
     /// Session bus connection of the D-Bus service, for signals.
     pub dbus: OnceLock<gio::DBusConnection>,
     thumbnails: Arc<ThumbnailCache>,
-    pub notifier: OnceLock<Notifier>,
+    /// Kernel notifications of the current FUSE session, while mounted.
+    notifier: Mutex<Option<Notifier>>,
+    pub mounted: AtomicBool,
+    /// Whether the user wants the drive mounted ("Mount"/"Unmount" sidebar actions, eject). A
+    /// state rather than requests: repeated or stale clicks cannot pile up.
+    pub wanted_mounted: tokio::sync::watch::Sender<bool>,
     pub verbose: bool,
     /// Absolute path of the mount point.
     pub mountpoint: std::path::PathBuf,
@@ -67,7 +73,9 @@ impl Drive {
             pins,
             dbus: OnceLock::new(),
             thumbnails: Arc::new(thumbnails),
-            notifier: OnceLock::new(),
+            notifier: Mutex::new(None),
+            mounted: AtomicBool::new(false),
+            wanted_mounted: tokio::sync::watch::Sender::new(true),
             verbose,
             mountpoint,
             pending: Mutex::new(None),
@@ -220,9 +228,29 @@ impl Drive {
         })
     }
 
+    /// Sets (or clears) the current FUSE session.
+    pub fn set_session(&self, notifier: Option<Notifier>) {
+        let mounted = notifier.is_some();
+        self.mounted.store(mounted, Ordering::SeqCst);
+        *self.notifier.lock().unwrap_or_else(|e| e.into_inner()) = notifier;
+        // File managers showing the mount point only see the change if told to reload.
+        if let Some(connection) = self.dbus.get() {
+            crate::dbus::emit_mount_state_changed(connection, mounted);
+        }
+    }
+
+    pub fn request_mount(&self) {
+        self.wanted_mounted.send_replace(true);
+    }
+
+    pub fn request_unmount(&self) {
+        self.wanted_mounted.send_replace(false);
+    }
+
     /// Tells the kernel to drop stale cached entries.
     pub fn invalidate(&self, invalidations: Vec<Invalidation>) {
-        let Some(notifier) = self.notifier.get() else { return };
+        let notifier = self.notifier.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(notifier) = notifier.as_ref() else { return };
         for invalidation in invalidations {
             // ENOENT only means the kernel had nothing cached.
             let _ = match invalidation {

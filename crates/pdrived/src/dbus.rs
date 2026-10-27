@@ -28,9 +28,11 @@ const PROVIDER_INTERFACE: &str = "org.freedesktop.CloudProviders.Provider";
 const ACCOUNT_INTERFACE: &str = "org.freedesktop.CloudProviders.Account";
 const OBJECT_MANAGER_INTERFACE: &str = "org.freedesktop.DBus.ObjectManager";
 
-const DISPLAY_NAME: &str = "PDrive";
+/// Name of the client (provider) and of the account shown in the sidebar.
+const PROVIDER_NAME: &str = "PDrive";
+const ACCOUNT_NAME: &str = "Proton Drive";
 const WEB_URL: &str = "https://drive.proton.me";
-const ACTIVITY_POLL_INTERVAL: Duration = Duration::from_secs(2);
+const ACTIVITY_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 /// CloudProvidersAccountStatus.
 const STATUS_IDLE: i32 = 1;
@@ -52,6 +54,9 @@ const INTROSPECTION: &str = r#"
     <property name="MountPoint" type="s" access="read"/>
     <signal name="FileStatusChanged">
       <arg name="path" type="s"/>
+    </signal>
+    <signal name="MountStateChanged">
+      <arg name="mounted" type="b"/>
     </signal>
   </interface>
   <interface name="org.freedesktop.DBus.ObjectManager">
@@ -85,10 +90,16 @@ pub fn emit_file_status_changed(connection: &gio::DBusConnection, path: &Path) {
     let _ = connection.emit_signal(None, OBJECT_PATH, INTERFACE, "FileStatusChanged", Some(&parameters));
 }
 
+pub fn emit_mount_state_changed(connection: &gio::DBusConnection, mounted: bool) {
+    let _ = connection.emit_signal(None, OBJECT_PATH, INTERFACE, "MountStateChanged", Some(&(mounted,).to_variant()));
+}
+
 /// Starts the service on a dedicated thread. Failures are logged: the mount works without it.
 pub fn start(drive: Arc<Drive>, runtime: tokio::runtime::Handle) {
     let spawned = std::thread::Builder::new().name("dbus".into()).spawn(move || {
-        let context = glib::MainContext::new();
+        // The default context: `glib::timeout_add_local` and friends attach to it, and nothing
+        // else in the daemon uses it.
+        let context = glib::MainContext::default();
         let main_loop = glib::MainLoop::new(Some(&context), false);
         let result = context.with_thread_default(|| {
             if let Err(e) = serve(&drive, &runtime) {
@@ -169,8 +180,16 @@ fn register_drive_interface(
     Ok(())
 }
 
-/// Sync state of the account for the sidebar.
+/// Sync state of the account for the sidebar; the tooltip tells it is a third-party client.
 fn account_status(drive: &Drive) -> (i32, String) {
+    let (status, details) = activity_status(drive);
+    (status, format!("{PROVIDER_NAME} (unofficial client) · {details}"))
+}
+
+fn activity_status(drive: &Drive) -> (i32, String) {
+    if !drive.mounted.load(std::sync::atomic::Ordering::SeqCst) {
+        return (STATUS_IDLE, "Not mounted: use Mount in the menu".to_owned());
+    }
     let activity = drive.activity();
     let mut details = Vec::new();
     if activity.uploads > 0 {
@@ -189,7 +208,7 @@ fn account_status(drive: &Drive) -> (i32, String) {
 fn account_properties(drive: &Drive) -> HashMap<String, Variant> {
     let (status, details) = account_status(drive);
     HashMap::from([
-        ("Name".to_owned(), DISPLAY_NAME.to_variant()),
+        ("Name".to_owned(), ACCOUNT_NAME.to_variant()),
         ("Path".to_owned(), drive.mountpoint.to_string_lossy().to_variant()),
         ("Icon".to_owned(), "folder-remote-symbolic".to_variant()),
         ("Status".to_owned(), status.to_variant()),
@@ -210,7 +229,7 @@ fn register_cloud_providers(
             if method != "GetManagedObjects" {
                 return invocation.return_dbus_error("org.freedesktop.DBus.Error.UnknownMethod", method);
             }
-            let provider = HashMap::from([("Name".to_owned(), DISPLAY_NAME.to_variant())]);
+            let provider = HashMap::from([("Name".to_owned(), PROVIDER_NAME.to_variant())]);
             let objects: HashMap<ObjectPath, HashMap<String, HashMap<String, Variant>>> = HashMap::from([
                 (object_path(PROVIDER_PATH), HashMap::from([(PROVIDER_INTERFACE.to_owned(), provider)])),
                 (object_path(ACCOUNT_PATH), HashMap::from([(ACCOUNT_INTERFACE.to_owned(), account_properties(&objects_drive))])),
@@ -221,7 +240,7 @@ fn register_cloud_providers(
 
     connection
         .register_object(PROVIDER_PATH, &interface(PROVIDER_INTERFACE))
-        .property(|_, _, _, _, _| DISPLAY_NAME.to_variant())
+        .property(|_, _, _, _, _| PROVIDER_NAME.to_variant())
         .build()?;
 
     let account_drive = drive.clone();
@@ -232,8 +251,20 @@ fn register_cloud_providers(
 
     // Menu of the account in the sidebar; Nautilus inserts the actions under "cloudprovider".
     let menu = gio::Menu::new();
+    // The first item toggles between "Mount" and "Unmount". File managers do not reliably
+    // follow the enabled state of remote actions, but they read the menu model each time.
+    let mut menu_mounted = drive.mounted.load(std::sync::atomic::Ordering::SeqCst);
+    menu.append_item(&mount_menu_item(menu_mounted));
     menu.append(Some("Open in the browser"), Some("cloudprovider.open-web"));
     let actions = gio::SimpleActionGroup::new();
+    let mount = gio::SimpleAction::new("mount", None);
+    let mount_drive = drive.clone();
+    mount.connect_activate(move |_, _| mount_drive.request_mount());
+    actions.add_action(&mount);
+    let unmount = gio::SimpleAction::new("unmount", None);
+    let unmount_drive = drive.clone();
+    unmount.connect_activate(move |_, _| unmount_drive.request_unmount());
+    actions.add_action(&unmount);
     let open_web = gio::SimpleAction::new("open-web", None);
     open_web.connect_activate(|_, _| {
         if let Err(e) = gio::AppInfo::launch_default_for_uri(WEB_URL, None::<&gio::AppLaunchContext>) {
@@ -248,6 +279,12 @@ fn register_cloud_providers(
     let (poll_connection, poll_drive) = (connection.clone(), drive.clone());
     let mut last = account_status(drive);
     glib::timeout_add_local(ACTIVITY_POLL_INTERVAL, move || {
+        let mounted = poll_drive.mounted.load(std::sync::atomic::Ordering::SeqCst);
+        if mounted != menu_mounted {
+            menu.remove(0);
+            menu.insert_item(0, &mount_menu_item(mounted));
+            menu_mounted = mounted;
+        }
         let current = account_status(&poll_drive);
         if current != last {
             let changed = HashMap::from([
@@ -261,6 +298,14 @@ fn register_cloud_providers(
         glib::ControlFlow::Continue
     });
     Ok(())
+}
+
+fn mount_menu_item(mounted: bool) -> gio::MenuItem {
+    if mounted {
+        gio::MenuItem::new(Some("Unmount"), Some("cloudprovider.unmount"))
+    } else {
+        gio::MenuItem::new(Some("Mount"), Some("cloudprovider.mount"))
+    }
 }
 
 fn object_path(path: &str) -> ObjectPath {

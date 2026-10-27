@@ -1,4 +1,4 @@
-PKGS := libnautilus-extension-4 gio-2.0 gmodule-2.0
+PKGS := libnautilus-extension-4 gio-2.0 gmodule-2.0 gtk4
 CFLAGS ?= -O2 -g
 CFLAGS += -Wall -Wextra -Wno-unused-parameter -fPIC -fvisibility=hidden $(shell pkg-config --cflags $(PKGS))
 LDLIBS := $(shell pkg-config --libs $(PKGS))

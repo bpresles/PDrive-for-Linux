@@ -28,6 +28,11 @@ pub enum Replay {
 pub async fn run(drive: &Arc<Drive>, change: Change, replay: Replay) -> bool {
     // One replay at a time: the pending change slot is shared with the FUSE callbacks.
     let _guard = drive.replay_lock.lock().await;
+    // Not mounted (ejected): nobody to notify, just update the tree.
+    if !drive.mounted.load(std::sync::atomic::Ordering::SeqCst) {
+        drive.apply(change);
+        return false;
+    }
     drive.set_pending(change);
     let root = drive.mountpoint.clone();
     let result = tokio::task::spawn_blocking(move || run_operation(&root, replay)).await;

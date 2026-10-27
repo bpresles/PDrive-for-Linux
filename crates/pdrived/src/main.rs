@@ -7,7 +7,8 @@
 //! downloaded and decrypted on first open into `$XDG_CACHE_HOME/pdrive/content` and
 //! readable while downloading, and remote changes are applied from Drive events. Writes are
 //! staged locally and uploaded once the file is closed (see `writes.rs`); uploads interrupted by
-//! a stop are resumed at the next start. Stop with Ctrl+C, SIGTERM or `fusermount3 -u MOUNTPOINT`.
+//! a stop are resumed at the next start. Stop with Ctrl+C or SIGTERM; when the mount is ejected
+//! (`fusermount3 -u MOUNTPOINT`, or from the file manager), the daemon waits for a mount request.
 //! Set PDRIVE_VERBOSE=1 for logs.
 
 mod config;
@@ -69,22 +70,7 @@ async fn main() -> Result<()> {
     let pins = Pins::load(data_dir.join("pinned.json"));
     let drive = Arc::new(Drive::new(client, root.uid, content, staging, pins, ThumbnailCache::new(&cache_home), mountpoint.clone(), verbose));
 
-    let mut config = Config::default();
-    config.mount_options = vec![
-        MountOption::FSName("pdrive".into()),
-        MountOption::Subtype("pdrive".into()),
-        MountOption::NoAtime,
-        MountOption::DefaultPermissions,
-    ];
-    let mut session = fuser::Session::new(DriveFs::new(drive.clone(), tokio::runtime::Handle::current()), &mountpoint, &config)
-        .with_context(|| format!("cannot mount on {}", mountpoint.display()))?;
-    let _ = drive.notifier.set(session.notifier());
-    let mut unmounter = session.unmount_callable();
-    // The session loop returns when the file system is unmounted, whoever unmounts it.
-    let mut session_loop = tokio::task::spawn_blocking(move || session.run());
-    println!("Mounted on {}. Press Ctrl+C to unmount.", mountpoint.display());
     dbus::start(drive.clone(), tokio::runtime::Handle::current());
-
     let background = [
         tokio::spawn(watch::run(drive.clone(), scope)),
         tokio::spawn({
@@ -102,29 +88,79 @@ async fn main() -> Result<()> {
         }),
     ];
 
+    // Mounted until stopped. When the mount is ejected (unmounted from outside, or with the
+    // "Unmount" sidebar action), the daemon keeps running and mounts again on request ("Mount").
     let mut terminate = signal(SignalKind::terminate())?;
-    let ended = tokio::select! {
-        _ = tokio::signal::ctrl_c() => None,
-        _ = terminate.recv() => None,
-        result = &mut session_loop => Some(result),
+    let mut wanted = drive.wanted_mounted.subscribe();
+    let result = loop {
+        let mut session = mount(&drive, &mountpoint)?;
+        let mut unmounter = session.unmount_callable();
+        // The session loop returns when the file system is unmounted, whoever unmounts it.
+        let mut session_loop = tokio::task::spawn_blocking(move || session.run());
+        println!("Mounted on {}.", mountpoint.display());
+
+        let ejected = tokio::select! {
+            _ = tokio::signal::ctrl_c() => None,
+            _ = terminate.recv() => None,
+            result = &mut session_loop => Some(result),
+            // "Unmount" from the sidebar: like an eject.
+            _ = wanted.wait_for(|wanted| !*wanted) => {
+                if let Err(e) = unmounter.unmount() {
+                    eprintln!("unmount failed ({e}): detaching the mount");
+                    lazy_unmount(&mountpoint);
+                }
+                Some((&mut session_loop).await)
+            }
+        };
+        drive.set_session(None);
+        match ejected {
+            Some(result) => {
+                // Depending on how it was unmounted, the session ends with ECONNABORTED.
+                let result = result.map(|r| r.or_else(|e| if e.raw_os_error() == Some(libc::ECONNABORTED) { Ok(()) } else { Err(e) }));
+                if let Err(e) = result.map_err(anyhow::Error::from).and_then(|r| r.context("FUSE session failed")) {
+                    break Err(e);
+                }
+                println!("Unmounted: waiting for a mount request.");
+                // Ejected from outside: the user wants it unmounted until "Mount".
+                drive.request_unmount();
+                tokio::select! {
+                    _ = wanted.wait_for(|wanted| *wanted) => continue,
+                    _ = tokio::signal::ctrl_c() => break Ok(()),
+                    _ = terminate.recv() => break Ok(()),
+                }
+            }
+            None => {
+                if let Err(e) = unmounter.unmount() {
+                    // Busy (e.g. open in a file manager): detach it now, it goes away once released.
+                    eprintln!("unmount failed ({e}): detaching the mount");
+                    lazy_unmount(&mountpoint);
+                }
+                break session_loop.await.map_err(anyhow::Error::from).and_then(|r| r.context("FUSE session failed"));
+            }
+        }
     };
     for task in background {
         task.abort();
     }
-    let result = match ended {
-        Some(result) => result,
-        None => {
-            if let Err(e) = unmounter.unmount() {
-                // Busy (e.g. open in a file manager): detach it now, it goes away once released.
-                eprintln!("unmount failed ({e}): detaching the mount");
-                lazy_unmount(&mountpoint);
-            }
-            session_loop.await
-        }
-    };
-    result?.context("FUSE session failed")?;
-    println!("Unmounted. Pending uploads, if any, are resumed at the next start.");
-    Ok(())
+    println!("Stopped. Pending uploads, if any, are resumed at the next start.");
+    result
+}
+
+fn mount(drive: &Arc<Drive>, mountpoint: &Path) -> Result<fuser::Session<DriveFs>> {
+    let mountpoint = prepare_mountpoint(mountpoint)?;
+    let mut config = Config::default();
+    config.mount_options = vec![
+        MountOption::FSName("pdrive".into()),
+        MountOption::Subtype("pdrive".into()),
+        MountOption::NoAtime,
+        MountOption::DefaultPermissions,
+        // Hidden from the file manager volumes: the sidebar entry is the CloudProviders account.
+        MountOption::CUSTOM("x-gvfs-hide".into()),
+    ];
+    let session = fuser::Session::new(DriveFs::new(drive.clone(), tokio::runtime::Handle::current()), &mountpoint, &config)
+        .with_context(|| format!("cannot mount on {}", mountpoint.display()))?;
+    drive.set_session(Some(session.notifier()));
+    Ok(session)
 }
 
 /// Creates the mount point if needed, and clears a dead mount left by a crashed run.
