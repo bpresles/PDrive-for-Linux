@@ -129,6 +129,8 @@ impl ContentCache {
     ) -> std::io::Result<Opened> {
         let path = self.path_for(revision_uid);
         if let Ok(file) = File::open(&path) {
+            // Recently used content is purged last.
+            let _ = file.set_modified(std::time::SystemTime::now());
             return Ok(Opened::Complete(file));
         }
         if let Some(opened) = self.join(revision_uid)? {
@@ -228,6 +230,38 @@ impl ContentCache {
             progress.send_replace(outcome);
         });
         Ok(Some(transfer))
+    }
+
+    /// Deletes the least recently used content until the cache is under `max_bytes`. Files still
+    /// open stay readable (Linux keeps deleted files alive while open).
+    pub fn purge(&self, max_bytes: u64) {
+        let Ok(entries) = std::fs::read_dir(&self.dir) else { return };
+        let mut files: Vec<(std::time::SystemTime, u64, PathBuf)> = entries
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_none_or(|ext| ext == "head"))
+            .filter_map(|e| {
+                let metadata = e.metadata().ok()?;
+                Some((metadata.modified().ok()?, metadata.len(), e.path()))
+            })
+            .collect();
+        let mut total: u64 = files.iter().map(|(_, size, _)| size).sum();
+        if total <= max_bytes {
+            return;
+        }
+        files.sort();
+        let mut removed = 0;
+        for (_, size, path) in files {
+            if total <= max_bytes {
+                break;
+            }
+            if std::fs::remove_file(&path).is_ok() {
+                total -= size;
+                removed += 1;
+            }
+        }
+        if self.verbose {
+            eprintln!("[cache] purged {removed} file(s), {} MiB left", total / (1024 * 1024));
+        }
     }
 
     /// A reader of a partial download went away: cancel the download if nobody else reads it.

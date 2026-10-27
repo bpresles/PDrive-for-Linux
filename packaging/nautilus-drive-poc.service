@@ -1,0 +1,14 @@
+[Unit]
+Description=Proton Drive mount for GNOME Files (unofficial third-party client)
+# The session is read from the Secret Service keyring of the graphical session.
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=exec
+ExecStart=%h/.local/bin/pdfs
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=graphical-session.target

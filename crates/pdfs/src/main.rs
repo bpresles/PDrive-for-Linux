@@ -1,13 +1,16 @@
 //! Mounts "My files" with FUSE.
 //!
-//!     pdfs MOUNTPOINT
+//!     pdfs [MOUNTPOINT]
 //!
-//! Folders are listed on demand (with their Proton thumbnails written to the desktop thumbnail
-//! cache), files are downloaded and decrypted on first open into
-//! `$XDG_CACHE_HOME/nautilus-drive-poc/content` and readable while downloading, and remote
-//! changes are applied from Drive events. Writes are staged locally and uploaded once the
-//! file is closed (see `writes.rs`). Stop with Ctrl+C (or `fusermount3 -u MOUNTPOINT`). Set PDPOC_VERBOSE=1 for logs.
+//! The mount point defaults to the one of the settings (see `config.rs`). Folders are listed on
+//! demand (with their Proton thumbnails written to the desktop thumbnail cache), files are
+//! downloaded and decrypted on first open into `$XDG_CACHE_HOME/nautilus-drive-poc/content` and
+//! readable while downloading, and remote changes are applied from Drive events. Writes are
+//! staged locally and uploaded once the file is closed (see `writes.rs`); uploads interrupted by
+//! a stop are resumed at the next start. Stop with Ctrl+C, SIGTERM or `fusermount3 -u MOUNTPOINT`.
+//! Set PDPOC_VERBOSE=1 for logs.
 
+mod config;
 mod content;
 mod drive;
 mod fs;
@@ -17,37 +20,43 @@ mod tree;
 mod watch;
 mod writes;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use fuser::{Config, MountOption};
 use tokio::signal::unix::{signal, SignalKind};
 
+use config::{Settings, APP_DIR};
 use content::ContentCache;
 use drive::Drive;
+use fs::DriveFs;
 use thumbnails::ThumbnailCache;
 use writes::Staging;
-use fs::DriveFs;
+
+const CACHE_PURGE_INTERVAL: Duration = Duration::from_secs(10 * 60);
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let Some(mountpoint) = std::env::args_os().nth(1).map(PathBuf::from) else {
-        eprintln!("usage: pdfs MOUNTPOINT");
-        std::process::exit(2);
+    let settings = Settings::load()?;
+    let mountpoint = match std::env::args_os().nth(1) {
+        Some(path) => PathBuf::from(path),
+        None => config::expand_home(&settings.mountpoint)?,
     };
     let verbose = std::env::var_os("PDPOC_VERBOSE").is_some();
 
-    let cache_home = cache_home()?;
-    let content_dir = cache_home.join("nautilus-drive-poc").join("content");
-    std::fs::create_dir_all(&content_dir).with_context(|| format!("cannot create {}", content_dir.display()))?;
+    let cache_home = config::xdg_dir("XDG_CACHE_HOME", ".cache")?;
+    let content_dir = cache_home.join(APP_DIR).join("content");
+    let staging_dir = cache_home.join(APP_DIR).join("staging");
+    for dir in [&content_dir, &staging_dir] {
+        std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
+    }
+    let mountpoint = prepare_mountpoint(&mountpoint)?;
 
     let client = pdcore::connect(verbose).await?;
     let root = client.my_files_folder().await?;
     let scope = root.tree_event_scope_id.clone();
-    let mountpoint = mountpoint.canonicalize().with_context(|| format!("cannot access {}", mountpoint.display()))?;
-    let staging_dir = cache_home.join("nautilus-drive-poc").join("staging");
-    std::fs::create_dir_all(&staging_dir).with_context(|| format!("cannot create {}", staging_dir.display()))?;
     let content = ContentCache::new(content_dir, tokio::runtime::Handle::current(), verbose);
     let staging = Staging::new(staging_dir);
     let drive = Arc::new(Drive::new(client, root.uid, content, staging, ThumbnailCache::new(&cache_home), mountpoint.clone(), verbose));
@@ -67,7 +76,22 @@ async fn main() -> Result<()> {
     let mut session_loop = tokio::task::spawn_blocking(move || session.run());
     println!("Mounted on {}. Press Ctrl+C to unmount.", mountpoint.display());
 
-    let watcher = tokio::spawn(watch::run(drive.clone(), scope));
+    let background = [
+        tokio::spawn(watch::run(drive.clone(), scope)),
+        tokio::spawn({
+            let drive = drive.clone();
+            async move { drive.recover_uploads().await }
+        }),
+        tokio::spawn({
+            let (drive, max_bytes) = (drive.clone(), settings.cache_size_bytes());
+            async move {
+                loop {
+                    drive.content.purge(max_bytes);
+                    tokio::time::sleep(CACHE_PURGE_INTERVAL).await;
+                }
+            }
+        }),
+    ];
 
     let mut terminate = signal(SignalKind::terminate())?;
     let ended = tokio::select! {
@@ -75,24 +99,39 @@ async fn main() -> Result<()> {
         _ = terminate.recv() => None,
         result = &mut session_loop => Some(result),
     };
-    watcher.abort();
+    for task in background {
+        task.abort();
+    }
     let result = match ended {
         Some(result) => result,
         None => {
-            unmounter.unmount().with_context(|| {
-                format!("unmount failed: the mount may be busy, close it and run `fusermount3 -u {}`", mountpoint.display())
-            })?;
+            if let Err(e) = unmounter.unmount() {
+                // Busy (e.g. open in a file manager): detach it now, it goes away once released.
+                eprintln!("unmount failed ({e}): detaching the mount");
+                lazy_unmount(&mountpoint);
+            }
             session_loop.await
         }
     };
     result?.context("FUSE session failed")?;
-    println!("Unmounted.");
+    println!("Unmounted. Pending uploads, if any, are resumed at the next start.");
     Ok(())
 }
 
-fn cache_home() -> Result<PathBuf> {
-    Ok(match std::env::var_os("XDG_CACHE_HOME") {
-        Some(dir) if !dir.is_empty() => PathBuf::from(dir),
-        _ => PathBuf::from(std::env::var_os("HOME").context("HOME is not set")?).join(".cache"),
-    })
+/// Creates the mount point if needed, and clears a dead mount left by a crashed run.
+fn prepare_mountpoint(path: &Path) -> Result<PathBuf> {
+    if std::fs::metadata(path).is_err_and(|e| e.raw_os_error() == Some(libc::ENOTCONN)) {
+        eprintln!("clearing a dead mount on {}", path.display());
+        lazy_unmount(path);
+    }
+    std::fs::create_dir_all(path).with_context(|| format!("cannot create {}", path.display()))?;
+    path.canonicalize().with_context(|| format!("cannot access {}", path.display()))
+}
+
+fn lazy_unmount(path: &Path) {
+    match std::process::Command::new("fusermount3").arg("-u").arg("-z").arg(path).status() {
+        Ok(status) if status.success() => {}
+        Ok(status) => eprintln!("fusermount3 -uz {} failed: {status}", path.display()),
+        Err(e) => eprintln!("cannot run fusermount3: {e}"),
+    }
 }

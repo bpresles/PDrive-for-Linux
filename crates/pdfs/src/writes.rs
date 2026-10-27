@@ -7,6 +7,9 @@
 //! revision of the original, keeping its history. Temporary and lock files of editors are never
 //! uploaded. Folder creation, renames, moves and deletions (to the trash) are applied to Proton
 //! Drive at once.
+//!
+//! Each staging file has a small journal next to it (where and what to upload), so that uploads
+//! interrupted by a stop or a crash are resumed at the next start (see [`Drive::recover_uploads`]).
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -18,6 +21,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use fuser::Errno;
 use pdsdk::proto::{self, NodeMoveItem};
 use pdsdk::SdkError;
+use serde::{Deserialize, Serialize};
 
 use crate::content::Opened;
 use crate::drive::Drive;
@@ -30,6 +34,8 @@ const UPLOAD_ATTEMPTS: u32 = 5;
 
 /// A file being written locally.
 struct Staged {
+    /// `<key>.data` holds the content, `<key>.json` the [`Journal`].
+    key: String,
     path: PathBuf,
     writers: usize,
     dirty: bool,
@@ -39,17 +45,45 @@ struct Staged {
 
 pub struct Staging {
     dir: PathBuf,
+    /// Distinguishes this run's staging files from those left by a previous one.
+    session: String,
     files: Mutex<HashMap<u64, Staged>>,
 }
 
 impl Staging {
     pub fn new(dir: PathBuf) -> Self {
-        Self { dir, files: Mutex::new(HashMap::new()) }
+        let session = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis().to_string();
+        Self { dir, session, files: Mutex::new(HashMap::new()) }
     }
 
     fn files(&self) -> std::sync::MutexGuard<'_, HashMap<u64, Staged>> {
         self.files.lock().unwrap_or_else(|e| e.into_inner())
     }
+
+    fn new_staged(&self, ino: u64) -> Staged {
+        let key = format!("{}-{ino}", self.session);
+        Staged { path: self.dir.join(format!("{key}.data")), key, writers: 0, dirty: false, generation: 0 }
+    }
+
+    fn journal_path(&self, key: &str) -> PathBuf {
+        self.dir.join(format!("{key}.json"))
+    }
+
+    fn discard(&self, staged: &Staged) {
+        let _ = std::fs::remove_file(&staged.path);
+        let _ = std::fs::remove_file(self.journal_path(&staged.key));
+    }
+}
+
+/// What to do with a staging file if the upload has to be resumed by a later run.
+#[derive(Serialize, Deserialize)]
+struct Journal {
+    /// Remote file and revision the content is based on; none for a new file.
+    file_uid: Option<String>,
+    base_revision_uid: Option<String>,
+    parent_uid: String,
+    name: String,
+    mtime: u64,
 }
 
 /// Editor temporary and lock files: kept locally, never uploaded.
@@ -85,8 +119,8 @@ impl Drive {
             return Ok(path);
         }
         let has_content = matches!(&self.tree().get(ino).ok_or(Errno::ENOENT)?.kind, EntryKind::File { revision_uid, .. } if !revision_uid.is_empty());
-        let path = self.staging.dir.join(format!("{ino}"));
-        let mut staged = File::create(&path)?;
+        let new_staged = self.staging.new_staged(ino);
+        let mut staged = File::create(&new_staged.path)?;
         if has_content && !empty {
             let mut source = match self.open_content(ino, true).await? {
                 Opened::Complete(file) => file,
@@ -103,10 +137,40 @@ impl Drive {
             source.rewind()?;
             std::io::copy(&mut source, &mut staged)?;
         }
-        let mut files = self.staging.files();
-        // Staged concurrently: keep the first one.
-        let entry = files.entry(ino).or_insert(Staged { path: path.clone(), writers: 0, dirty: false, generation: 0 });
-        Ok(entry.path.clone())
+        let path = {
+            let mut files = self.staging.files();
+            // Staged concurrently: keep the first one.
+            files.entry(ino).or_insert(new_staged).path.clone()
+        };
+        self.write_journal(ino);
+        Ok(path)
+    }
+
+    /// Records where and what to upload, in case the upload has to be resumed by a later run.
+    fn write_journal(&self, ino: u64) {
+        let journal = {
+            let tree = self.tree();
+            let Some(entry) = tree.get(ino) else { return };
+            let EntryKind::File { revision_uid, .. } = &entry.kind else { return };
+            let Some(parent) = tree.get(entry.parent) else { return };
+            Journal {
+                file_uid: (!is_local(&entry.uid)).then(|| entry.uid.clone()),
+                base_revision_uid: (!revision_uid.is_empty()).then(|| revision_uid.clone()),
+                parent_uid: parent.uid.clone(),
+                name: entry.name.clone(),
+                mtime: entry.mtime.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
+            }
+        };
+        let Some(key) = self.staging.files().get(&ino).map(|s| s.key.clone()) else { return };
+        let path = self.staging.journal_path(&key);
+        let temporary = path.with_extension("json.tmp");
+        let result = serde_json::to_vec(&journal)
+            .map_err(std::io::Error::other)
+            .and_then(|data| std::fs::write(&temporary, data))
+            .and_then(|()| std::fs::rename(&temporary, &path));
+        if let Err(e) = result {
+            eprintln!("cannot write the upload journal of {}: {e}", journal.name);
+        }
     }
 
     /// Opens a file for writing (creating its staging copy).
@@ -173,6 +237,7 @@ impl Drive {
     }
 
     fn schedule_upload(self: &Arc<Self>, ino: u64) {
+        self.write_journal(ino);
         let drive = self.clone();
         tokio::spawn(async move {
             let Some(generation) = drive.staging.files().get(&ino).map(|s| s.generation) else { return };
@@ -214,7 +279,7 @@ impl Drive {
         let (snapshot, generation) = {
             let files = self.staging.files();
             let Some(staged) = files.get(&ino) else { return Ok(()) };
-            let snapshot = self.staging.dir.join(format!("{ino}.upload.{}", staged.generation));
+            let snapshot = self.staging.dir.join(format!("{}.upload.{}", staged.key, staged.generation));
             std::fs::copy(&staged.path, &snapshot).map_err(|e| e.to_string())?;
             (snapshot, staged.generation)
         };
@@ -266,7 +331,7 @@ impl Drive {
         let mut files = self.staging.files();
         if let Some(staged) = files.get_mut(&ino) {
             if staged.generation == generation && staged.writers == 0 {
-                let _ = std::fs::remove_file(&staged.path);
+                self.staging.discard(staged);
                 files.remove(&ino);
             } else {
                 // Written again during the upload: that change has its own upload.
@@ -288,10 +353,11 @@ impl Drive {
             }
             tree.insert_local_file(parent, name.to_owned(), SystemTime::now())
         };
-        let path = self.staging.dir.join(format!("{ino}"));
-        let file = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(true).open(&path)?;
+        let staged = Staged { writers: 1, dirty: true, generation: 1, ..self.staging.new_staged(ino) };
+        let file = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(true).open(&staged.path)?;
         // A new file is "dirty" even if nothing is written: an empty file is uploaded.
-        self.staging.files().insert(ino, Staged { path, writers: 1, dirty: true, generation: 1 });
+        self.staging.files().insert(ino, staged);
+        self.write_journal(ino);
         Ok((ino, file))
     }
 
@@ -347,7 +413,7 @@ impl Drive {
             })?;
         }
         if let Some(staged) = self.staging.files().remove(&ino) {
-            let _ = std::fs::remove_file(staged.path);
+            self.staging.discard(&staged);
         }
         self.tree().remove_ino(ino);
         Ok(())
@@ -401,14 +467,18 @@ impl Drive {
     /// Moves the staged content of a local file into an existing file, then drops the local one.
     async fn replace_content(self: &Arc<Self>, source: u64, target: u64) -> Result<(), Errno> {
         let staged = self.staging.files().remove(&source).ok_or(Errno::EIO)?;
-        let path = self.staging.dir.join(format!("{target}"));
-        std::fs::rename(&staged.path, &path)?;
-        let size = std::fs::metadata(&path)?.len();
+        let _ = std::fs::remove_file(self.staging.journal_path(&staged.key));
+        let size = std::fs::metadata(&staged.path)?.len();
         {
             let mut files = self.staging.files();
-            let generation = files.get(&target).map_or(1, |s| s.generation + 1);
-            let writers = files.get(&target).map_or(0, |s| s.writers);
-            files.insert(target, Staged { path, writers, dirty: true, generation });
+            let (generation, writers) = match files.remove(&target) {
+                Some(previous) => {
+                    self.staging.discard(&previous);
+                    (previous.generation + 1, previous.writers)
+                }
+                None => (1, 0),
+            };
+            files.insert(target, Staged { writers, dirty: true, generation, ..staged });
         }
         let mtime = self.tree().get(source).map_or_else(SystemTime::now, |e| e.mtime);
         {
@@ -419,6 +489,92 @@ impl Drive {
         }
         self.schedule_upload(target);
         Ok(())
+    }
+}
+
+impl Drive {
+    /// Resumes the uploads that a previous run could not finish. A file changed remotely since
+    /// (or whose name was taken) is uploaded as a conflict copy next to it: nothing is overwritten.
+    pub async fn recover_uploads(self: &Arc<Self>) {
+        let Ok(entries) = std::fs::read_dir(&self.staging.dir) else { return };
+        let mut journals: Vec<PathBuf> = entries.filter_map(|e| e.ok().map(|e| e.path())).collect();
+        journals.sort();
+        for journal_path in journals {
+            let Some(key) = journal_path.file_name().and_then(|n| n.to_str()).and_then(|n| n.strip_suffix(".json")) else { continue };
+            if key.starts_with(&format!("{}-", self.staging.session)) {
+                continue;
+            }
+            let data = self.staging.dir.join(format!("{key}.data"));
+            let journal: Journal = match std::fs::read(&journal_path).ok().and_then(|j| serde_json::from_slice::<Journal>(&j).ok()) {
+                Some(journal) if data.exists() && !is_temporary(&journal.name) => journal,
+                _ => {
+                    let _ = std::fs::remove_file(&journal_path);
+                    let _ = std::fs::remove_file(&data);
+                    continue;
+                }
+            };
+            match self.resume_upload(&journal, &data).await {
+                Ok(name) => {
+                    eprintln!("[recovery] uploaded {name}, left over by the previous run");
+                    let _ = std::fs::remove_file(&journal_path);
+                }
+                // Kept for the next run.
+                Err(e) => eprintln!("[recovery] cannot upload {} yet: {e}", journal.name),
+            }
+        }
+        // Content left without a journal comes from files that were never closed: keep it aside.
+        if let Ok(entries) = std::fs::read_dir(&self.staging.dir) {
+            for path in entries.filter_map(|e| e.ok().map(|e| e.path())) {
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_owned();
+                if name.starts_with(&format!("{}-", self.staging.session)) {
+                    continue;
+                }
+                if name.contains(".upload.") || name.ends_with(".tmp") {
+                    let _ = std::fs::remove_file(&path);
+                } else if name.ends_with(".data") && !path.with_extension("json").exists() {
+                    eprintln!("[recovery] unsaved content without destination kept in {}", path.display());
+                }
+            }
+        }
+    }
+
+    /// Uploads a journaled staging file; returns the name it got.
+    async fn resume_upload(self: &Arc<Self>, journal: &Journal, data: &std::path::Path) -> Result<String, SdkError> {
+        let size = std::fs::metadata(data).map_err(|e| SdkError::Protocol(e.to_string()))?.len();
+        let mtime = Some(proto::Timestamp { seconds: journal.mtime as i64, nanos: 0 });
+        let attempt = match (&journal.file_uid, &journal.base_revision_uid) {
+            (Some(_), Some(base)) => self.client.upload_revision(base, data, size, mtime).await,
+            _ => {
+                let media_type = media_type(&journal.name, data);
+                self.client.upload_new_file(&journal.parent_uid, &journal.name, &media_type, data, size, mtime).await
+            }
+        };
+        let (uploaded, name) = match attempt {
+            Ok(uploaded) => (uploaded, journal.name.clone()),
+            Err(e) if is_transient(&e) => return Err(e),
+            Err(e) => {
+                let name = conflict_name(&journal.name);
+                eprintln!("[recovery] {} cannot be uploaded as is ({e}): uploading it as {name}", journal.name);
+                let media_type = media_type(&journal.name, data);
+                let uploaded = self.client.upload_new_file(&journal.parent_uid, &name, &media_type, data, size, mtime).await?;
+                (uploaded, name)
+            }
+        };
+        self.content.adopt(&uploaded.revision_uid, data);
+        Ok(name)
+    }
+}
+
+fn is_transient(error: &SdkError) -> bool {
+    matches!(error, SdkError::Sdk { domain: proto::ErrorDomain::Network | proto::ErrorDomain::Transport, .. })
+}
+
+/// "report.odt" → "report (conflict 2026-10-27 22.15).odt"
+fn conflict_name(name: &str) -> String {
+    let stamp = glib::DateTime::now_local().and_then(|d| d.format("%Y-%m-%d %H.%M")).map(|s| s.to_string()).unwrap_or_default();
+    match name.rfind('.').filter(|&i| i > 0) {
+        Some(dot) => format!("{} (conflict {stamp}){}", &name[..dot], &name[dot..]),
+        None => format!("{name} (conflict {stamp})"),
     }
 }
 
