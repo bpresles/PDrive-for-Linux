@@ -108,6 +108,11 @@ fn timestamp(time: SystemTime) -> proto::Timestamp {
 }
 
 impl Drive {
+    /// Number of files written locally and not uploaded yet.
+    pub fn staging_count(&self) -> usize {
+        self.staging.files().len()
+    }
+
     /// Local path of the content of a file being written, if any.
     pub fn staged_path(&self, ino: u64) -> Option<PathBuf> {
         self.staging.files().get(&ino).map(|s| s.path.clone())
@@ -176,6 +181,7 @@ impl Drive {
     /// Opens a file for writing (creating its staging copy).
     pub async fn open_write(self: &Arc<Self>, ino: u64, truncate: bool) -> Result<File, Errno> {
         let path = self.stage(ino, truncate).await?;
+        self.notify_status(ino);
         let file = std::fs::OpenOptions::new().read(true).write(true).open(&path)?;
         let mut files = self.staging.files();
         let staged = files.get_mut(&ino).ok_or(Errno::EIO)?;
@@ -338,6 +344,7 @@ impl Drive {
                 staged.dirty = staged.generation != generation;
             }
         }
+        self.notify_status(ino);
         if self.verbose {
             eprintln!("[upload] done {name}");
         }

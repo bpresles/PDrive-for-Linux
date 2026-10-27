@@ -106,6 +106,17 @@ impl ContentCache {
         }
     }
 
+    /// Removes the cached content of a revision.
+    pub fn evict(&self, revision_uid: &str) {
+        let path = self.path_for(revision_uid);
+        let _ = std::fs::remove_file(path.with_extension("head"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    pub fn active_transfers(&self) -> usize {
+        self.transfers().len()
+    }
+
     /// Whether the content or its head is available locally, or being downloaded.
     pub fn has_head(&self, revision_uid: &str) -> bool {
         let path = self.path_for(revision_uid);
@@ -232,13 +243,15 @@ impl ContentCache {
         Ok(Some(transfer))
     }
 
-    /// Deletes the least recently used content until the cache is under `max_bytes`. Files still
-    /// open stay readable (Linux keeps deleted files alive while open).
-    pub fn purge(&self, max_bytes: u64) {
+    /// Deletes the least recently used content until the cache is under `max_bytes`, except the
+    /// `kept` revisions. Files still open stay readable (Linux keeps deleted files alive while open).
+    pub fn purge(&self, max_bytes: u64, kept: &std::collections::HashSet<String>) {
+        let kept: std::collections::HashSet<PathBuf> = kept.iter().map(|r| self.path_for(r)).collect();
         let Ok(entries) = std::fs::read_dir(&self.dir) else { return };
         let mut files: Vec<(std::time::SystemTime, u64, PathBuf)> = entries
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().is_none_or(|ext| ext == "head"))
+            .filter(|e| !kept.contains(&e.path()))
             .filter_map(|e| {
                 let metadata = e.metadata().ok()?;
                 Some((metadata.modified().ok()?, metadata.len(), e.path()))

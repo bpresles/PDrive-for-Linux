@@ -146,6 +146,15 @@ impl Tree {
         self.children(parent)?.iter().copied().find(|c| self.entries[c].name == name)
     }
 
+    /// Inode of a path relative to the mount root, among the loaded entries.
+    pub fn lookup_path(&self, path: &std::path::Path) -> Option<u64> {
+        let mut ino = ROOT_INO;
+        for component in path.components() {
+            ino = self.child(ino, component.as_os_str().to_str()?)?;
+        }
+        Some(ino)
+    }
+
     /// Path of a node relative to the mount root.
     pub fn path_of(&self, mut ino: u64) -> Option<std::path::PathBuf> {
         let mut components = Vec::new();

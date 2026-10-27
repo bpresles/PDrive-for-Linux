@@ -11,6 +11,7 @@ use pdsdk::proto::{file_thumbnail, ThumbnailType};
 use crate::content::{ContentCache, Opened};
 use crate::replay::{self, Replay};
 use crate::thumbnails::ThumbnailCache;
+use crate::pins::Pins;
 use crate::writes::Staging;
 use crate::tree::{EntryKind, Invalidation, NodeInfo, NodeKind, Tree};
 
@@ -32,6 +33,9 @@ pub struct Drive {
     pub tree: Mutex<Tree>,
     pub content: Arc<ContentCache>,
     pub staging: Staging,
+    pub pins: Pins,
+    /// Session bus connection of the D-Bus service, for signals.
+    pub dbus: OnceLock<gio::DBusConnection>,
     thumbnails: Arc<ThumbnailCache>,
     pub notifier: OnceLock<Notifier>,
     pub verbose: bool,
@@ -44,11 +48,13 @@ pub struct Drive {
 }
 
 impl Drive {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         client: DriveClient,
         root_uid: String,
         content: ContentCache,
         staging: Staging,
+        pins: Pins,
         thumbnails: ThumbnailCache,
         mountpoint: PathBuf,
         verbose: bool,
@@ -58,6 +64,8 @@ impl Drive {
             tree: Mutex::new(Tree::new(root_uid)),
             content: Arc::new(content),
             staging,
+            pins,
+            dbus: OnceLock::new(),
             thumbnails: Arc::new(thumbnails),
             notifier: OnceLock::new(),
             verbose,
@@ -203,6 +211,7 @@ impl Drive {
         let on_complete = move |size| {
             if let Some(drive) = drive.upgrade() {
                 drive.tree().set_file_size(ino, size);
+                drive.notify_status(ino);
             }
         };
         self.content.open(self.client.clone(), &revision_uid, size, need_all, on_complete).await.map_err(|e| {

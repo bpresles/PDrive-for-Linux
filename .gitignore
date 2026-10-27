@@ -1,3 +1,4 @@
 /target/
 /third_party/
 /native/linux-x64/
+/extension/*.so

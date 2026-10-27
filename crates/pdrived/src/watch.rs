@@ -66,6 +66,10 @@ async fn apply(drive: &Arc<Drive>, event: &DriveEvent) {
     let Some((change, replay)) = planned else { return };
     // A new or updated file needs its thumbnail in the desktop cache (the old one no longer
     // matches the modification time).
+    let updated_file = match &change {
+        Change::Update { node, .. } if matches!(node.kind, NodeKind::File { .. }) => Some(node.uid.clone()),
+        _ => None,
+    };
     let thumbnail_of = match &change {
         Change::Update { node, .. } if matches!(node.kind, NodeKind::File { has_thumbnail: true, .. }) => Some(node.clone()),
         _ => None,
@@ -81,6 +85,18 @@ async fn apply(drive: &Arc<Drive>, event: &DriveEvent) {
     };
     if let Some(node) = thumbnail_of {
         drive.ensure_thumbnails(vec![node]).await;
+    }
+    if let Some(ino) = updated_file.and_then(|uid| drive.tree().ino_of(&uid)) {
+        // A pinned file with a new revision, or a new file in a pinned folder: keep it offline.
+        let in_pinned_folder = {
+            let tree = drive.tree();
+            tree.get(ino).and_then(|e| tree.get(e.parent)).is_some_and(|p| drive.pins.is_folder_pinned(&p.uid))
+        };
+        if in_pinned_folder {
+            drive.keep_offline(ino).await;
+        } else {
+            drive.refresh_pinned(ino).await;
+        }
     }
     if drive.verbose {
         eprintln!("[event] {} applied{}", event.id, if replayed { "" } else { " (without live notification)" });

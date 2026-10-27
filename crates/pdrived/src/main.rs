@@ -12,9 +12,12 @@
 
 mod config;
 mod content;
+mod dbus;
 mod drive;
 mod fs;
+mod pins;
 mod replay;
+mod status;
 mod thumbnails;
 mod tree;
 mod watch;
@@ -32,6 +35,7 @@ use config::{Settings, APP_DIR};
 use content::ContentCache;
 use drive::Drive;
 use fs::DriveFs;
+use pins::Pins;
 use thumbnails::ThumbnailCache;
 use writes::Staging;
 
@@ -60,7 +64,10 @@ async fn main() -> Result<()> {
     let scope = root.tree_event_scope_id.clone();
     let content = ContentCache::new(content_dir, tokio::runtime::Handle::current(), verbose);
     let staging = Staging::new(staging_dir);
-    let drive = Arc::new(Drive::new(client, root.uid, content, staging, ThumbnailCache::new(&cache_home), mountpoint.clone(), verbose));
+    let data_dir = config::xdg_dir("XDG_DATA_HOME", ".local/share")?.join(APP_DIR);
+    std::fs::create_dir_all(&data_dir).with_context(|| format!("cannot create {}", data_dir.display()))?;
+    let pins = Pins::load(data_dir.join("pinned.json"));
+    let drive = Arc::new(Drive::new(client, root.uid, content, staging, pins, ThumbnailCache::new(&cache_home), mountpoint.clone(), verbose));
 
     let mut config = Config::default();
     config.mount_options = vec![
@@ -76,6 +83,7 @@ async fn main() -> Result<()> {
     // The session loop returns when the file system is unmounted, whoever unmounts it.
     let mut session_loop = tokio::task::spawn_blocking(move || session.run());
     println!("Mounted on {}. Press Ctrl+C to unmount.", mountpoint.display());
+    dbus::start(drive.clone(), tokio::runtime::Handle::current());
 
     let background = [
         tokio::spawn(watch::run(drive.clone(), scope)),
@@ -87,7 +95,7 @@ async fn main() -> Result<()> {
             let (drive, max_bytes) = (drive.clone(), settings.cache_size_bytes());
             async move {
                 loop {
-                    drive.content.purge(max_bytes);
+                    drive.content.purge(max_bytes, &drive.pins.pinned_revisions());
                     tokio::time::sleep(CACHE_PURGE_INTERVAL).await;
                 }
             }

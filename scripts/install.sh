@@ -3,6 +3,8 @@
 #   ~/.local/lib/pdrive/                    native libraries (Proton Drive SDK and crypto)
 #   ~/.local/bin/pdrived, pdrive            mount daemon and command-line tool (login, logout)
 #   ~/.config/systemd/user/pdrive.service
+#   ~/.local/share/icons/hicolor/scalable/emblems/   sync state emblems for Nautilus
+# The Nautilus extension and the sidebar declaration are installed by install-system.sh (sudo).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -31,6 +33,10 @@ if [[ -f "$UNIT_DIR/$LEGACY_UNIT" ]]; then
     LEGACY_REMOVED=1
 fi
 
+ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/emblems"
+mkdir -p "$ICON_DIR"
+install -m 0644 "$ROOT/packaging/icons/"*.svg "$ICON_DIR/"
+
 install -m 0644 "$ROOT/packaging/$UNIT" "$UNIT_DIR/$UNIT"
 systemctl --user daemon-reload
 
@@ -45,6 +51,7 @@ Installed. Next steps:
   pdrive login                                  # once: sign in through the browser
   systemctl --user enable --now $UNIT           # mount now and at each login
   journalctl --user -u $UNIT -f                 # follow the logs
+  scripts/install-system.sh                     # Nautilus emblems, menu and sidebar (sudo)
 
 The mount point and the cache size are set in
 ${XDG_CONFIG_HOME:-$HOME/.config}/pdrive/config.toml (default: ~/ProtonDrive, 10 GiB).
