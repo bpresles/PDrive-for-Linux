@@ -1,0 +1,2 @@
+# The Proton SDK and crypto libraries are private to this package: found through the rpath.
+pdrive-for-linux: custom-library-search-path *

@@ -1,0 +1,153 @@
+# Release on a version tag (v*): native libraries, vendored source archive, RPM, DEB, SHA-256 sums,
+# GitHub release, optional COPR submission. The tag must match Cargo.toml (workspace.package.version),
+# packaging/rpm/pdrive-for-linux.spec and debian/changelog, else the run fails at the first job.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      native_archive: ${{ steps.v.outputs.native_archive }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: v
+        run: |
+          scripts/check-version.sh "$GITHUB_REF_NAME"
+          source scripts/lib-version.sh
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "native_archive=$NATIVE_ARCHIVE" >> "$GITHUB_OUTPUT"
+
+  # .NET 10 NativeAOT + Rust at the revisions pinned in scripts/build-native.sh.
+  native:
+    needs: check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - name: NativeAOT prerequisites
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang zlib1g-dev
+      - name: Build native libraries
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add x86_64-unknown-linux-gnu
+          scripts/build-native.sh
+      - run: scripts/package-native.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native
+          path: dist/pdrive-native-linux-x64-*
+          if-no-files-found: error
+
+  # Project files + vendored Rust crates (see scripts/make-source-tarball.sh).
+  source:
+    needs: check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: |
+          rustup toolchain install stable --profile minimal
+          scripts/make-source-tarball.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: source
+          path: dist/pdrive-for-linux-*
+          if-no-files-found: error
+
+  rpm:
+    needs: [check, native, source]
+    runs-on: ubuntu-24.04
+    container: registry.fedoraproject.org/fedora:44
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      NATIVE_ARCHIVE: ${{ needs.check.outputs.native_archive }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: native, path: dist }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: source, path: dist }
+      - run: ln -s "$PWD/dist" /dist && bash scripts/container/build-rpm.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rpm
+          path: |
+            dist/*.rpm
+            !dist/*-debuginfo-*.rpm
+            !dist/*-debugsource-*.rpm
+          if-no-files-found: error
+
+  deb:
+    needs: [check, native, source]
+    runs-on: ubuntu-24.04
+    # Debian 13 ships rustc 1.85 (< 1.92 required by the dependencies): the script falls back to rustup.
+    container: docker.io/library/debian:trixie
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      NATIVE_ARCHIVE: ${{ needs.check.outputs.native_archive }}
+    steps:
+      - run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: native, path: dist }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: source, path: dist }
+      - run: ln -s "$PWD/dist" /dist && bash scripts/container/build-deb.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deb
+          path: dist/*.deb
+          if-no-files-found: error
+
+  release:
+    needs: [check, native, source, rpm, deb]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create the release
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { path: out, merge-multiple: true }
+      - name: SHA-256 sums
+        working-directory: out
+        run: |
+          rm -f *.sha256
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag --draft \
+            --title "PDrive for Linux ${GITHUB_REF_NAME#v}" \
+            --notes "Unofficial client, not affiliated with Proton AG. Verify the files with SHA256SUMS. Draft: review, then publish." \
+            out/*
+
+  # Optional: set the repository variable COPR_PROJECT (owner/project) and the secret COPR_CONFIG
+  # (content of the copr-cli config file). Skipped otherwise.
+  copr:
+    needs: [check, release]
+    if: ${{ vars.COPR_PROJECT != '' }}
+    runs-on: ubuntu-24.04
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: rpm, path: rpm }
+      - name: Submit the SRPM
+        env:
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
+          COPR_PROJECT: ${{ vars.COPR_PROJECT }}
+        run: |
+          dnf -y install copr-cli
+          install -d -m 700 ~/.config
+          (umask 077; printf '%s\n' "$COPR_CONFIG" > ~/.config/copr)
+          copr-cli build --nowait "$COPR_PROJECT" rpm/*.src.rpm

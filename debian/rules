@@ -1,0 +1,60 @@
+#!/usr/bin/make -f
+# Offline build: vendored crates (.cargo/config.toml of the source tarball) and prebuilt native
+# libraries unpacked in native/linux-x64 (see debian/README.source).
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+include /usr/share/dpkg/architecture.mk
+include /usr/share/dpkg/buildflags.mk
+
+PKG      := pdrive-for-linux
+# One variable per file name tied to the application identifier (renamed together).
+APP_ID    := io.github.bpresles.PDrive.App
+CLOUD_INI := io.github.bpresles.PDrive.ini
+LIBDIR   := /usr/lib/$(DEB_HOST_MULTIARCH)/pdrive
+EXTDIR   := $(shell pkg-config --variable=extensiondir libnautilus-extension-4)
+export CARGO_HOME := $(CURDIR)/debian/cargo-home
+export PDSDK_LIB_DIR := $(CURDIR)/native/linux-x64
+export RUSTFLAGS := -C link-arg=-Wl,-z,relro -C link-arg=-Wl,-z,now
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	test -f native/linux-x64/libproton_drive_sdk.so
+	cd native/linux-x64 && sha256sum -c SHA256SUMS
+	@cargo_version=$$(awk '/^\[workspace\.package\]/{f=1;next} /^\[/{f=0} f && /^version *=/{gsub(/"/,"",$$3); print $$3; exit}' Cargo.toml); \
+	  deb_version=$$(dpkg-parsechangelog -SVersion | sed 's/-[^-]*$$//'); \
+	  test "$$cargo_version" = "$$deb_version" || { echo "Cargo.toml $$cargo_version != changelog $$deb_version" >&2; exit 1; }
+
+override_dh_auto_build:
+	cargo build --release --frozen --offline -p pdrived -p pdrive -p pdrive-app
+	patchelf --set-rpath $(LIBDIR) target/release/pdrive target/release/pdrived
+	CFLAGS="$(CFLAGS) $(CPPFLAGS)" $(MAKE) -C extension LOCALEDIR=/usr/share/locale CC="$(CC) $(LDFLAGS)"
+	while read -r lang; do \
+	  case "$$lang" in ''|\#*) continue;; esac; \
+	  mkdir -p debian/locale/$$lang/LC_MESSAGES; \
+	  msgfmt --check -o debian/locale/$$lang/LC_MESSAGES/pdrive.mo po/$$lang.po; \
+	done < po/LINGUAS
+
+override_dh_auto_test:
+	desktop-file-validate packaging/$(APP_ID).desktop
+
+override_dh_auto_install:
+	install -Dpm0755 target/release/pdrive target/release/pdrived target/release/pdrive-app -t debian/$(PKG)/usr/bin
+	install -Dpm0644 native/linux-x64/libproton_drive_sdk.so native/linux-x64/libproton_crypto.so -t debian/$(PKG)$(LIBDIR)
+	$(MAKE) -C extension install DESTDIR=$(CURDIR)/debian/$(PKG) LOCALEDIR=/usr/share/locale
+	install -Dpm0644 packaging/$(CLOUD_INI) -t debian/$(PKG)/usr/share/cloud-providers
+	install -Dpm0644 packaging/$(APP_ID).desktop -t debian/$(PKG)/usr/share/applications
+	cd packaging/icons/hicolor && find . -name '*.svg' -exec install -Dpm0644 '{}' $(CURDIR)/debian/$(PKG)/usr/share/icons/hicolor/'{}' ';'
+	cp -a debian/locale/. debian/$(PKG)/usr/share/locale/
+
+# The two native libraries are private: no shlibs/symbols, resolved by their directory.
+override_dh_makeshlibs:
+	dh_makeshlibs -n
+
+override_dh_shlibdeps:
+	dh_shlibdeps -- -l$(CURDIR)/debian/$(PKG)$(LIBDIR)
+
+# dh_clean would delete vendor/*/Cargo.toml.orig, which the vendored checksums reference.
+override_dh_clean:
+	dh_clean -X.orig
+	rm -rf debian/locale debian/cargo-home

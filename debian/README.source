@@ -1,0 +1,8 @@
+Build inputs (no network at build time)
+---------------------------------------
+The orig tarball is dist/pdrive-for-linux-<version>.tar.xz (scripts/make-source-tarball.sh):
+project files plus vendored Rust crates and .cargo/config.toml.
+The prebuilt native libraries come from the native archive
+dist/pdrive-native-linux-x64-<sdk>-<crypto>.tar.xz (scripts/package-native.sh); unpack its
+content (the .so, SHA256SUMS, SOURCES.txt, LICENSE-*) into native/linux-x64/ before running
+dpkg-buildpackage. scripts/container/build-deb.sh does both steps.

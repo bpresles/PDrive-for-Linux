@@ -1,0 +1,37 @@
+# Packaging (RPM, DEB)
+
+Layout of the packages: `/usr/bin/{pdrive,pdrived,pdrive-app}`, private libraries in
+`/usr/lib64/pdrive` (Fedora) or `/usr/lib/<triplet>/pdrive` (Debian, rpath set with patchelf),
+the Nautilus extension in the Nautilus extensions directory, `.ini` in
+`/usr/share/cloud-providers`, icons, `.desktop`, `.mo` in `/usr/share/locale`.
+
+## Build inputs (no .NET, no network when building the packages)
+
+1. Native archive `pdrive-native-linux-x64-<sdk>-<crypto>.tar.xz`: the two prebuilt libraries
+   (`scripts/build-native.sh`, then `scripts/package-native.sh`), with SHA-256 sums and the MIT
+   licence files. It is Source1 of the SRPM.
+2. Source archive `pdrive-for-linux-<version>.tar.xz` (`scripts/make-source-tarball.sh`): project
+   plus Rust crates vendored with `cargo vendor`. Source0 of the SRPM.
+
+Locally: `scripts/build-packages.sh [rpm|deb]` (podman or docker). Release: push a `v<version>` tag;
+`.github/workflows/release.yml` fails unless the tag equals Cargo.toml, the spec and
+`debian/changelog` (`scripts/check-version.sh`). To bump the version, edit
+`[workspace.package]` in Cargo.toml, `Version:` in the spec and `debian/changelog`.
+`%global native_id` in the spec follows the revisions pinned in `scripts/build-native.sh`.
+
+## COPR
+
+Upload the SRPM built by CI (`copr-cli build <owner>/<project> pdrive-for-linux-*.src.rpm`, or the
+optional `copr` job: repository variable `COPR_PROJECT`, secret `COPR_CONFIG`). The SRPM carries both
+sources, so the COPR build needs no network (`enable_net` can stay off; turn it on only if the spec
+is changed to download sources or crates during the build). Limits: x86_64 only; prebuilt binaries
+and vendored crates make the package unfit for the official Fedora repositories; the libraries are
+built on Ubuntu 24.04 (glibc 2.34+ required, satisfied by current Fedora).
+
+## Migration from the development install
+
+`scripts/install-system.sh` writes `/usr/local/share/cloud-providers/io.github.pdrive.PDrive.ini`.
+Files under `/usr/local` belong to the administrator: the package scripts never delete them, they
+only print a warning telling to remove that file (the account would be listed twice). The extension
+is written by that script to the same system directory as the package; the package takes it over.
+Per-user files (`~/.local/...`, `pdrive.service`) are not touched either.

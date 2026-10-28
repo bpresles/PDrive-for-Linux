@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+# Migration: install-system.sh (development install) put the same declaration under
+# /usr/local, which libcloudproviders also reads: the account would appear twice. Files of
+# /usr/local belong to the administrator, so they are never removed from a maintainer script.
+# Old name (before the rename) and current name.
+for INI in io.github.pdrive.PDrive.ini io.github.bpresles.PDrive.ini; do
+    if [ "$1" = configure ] && [ -e "/usr/local/share/cloud-providers/$INI" ]; then
+        echo "pdrive-for-linux: /usr/local/share/cloud-providers/$INI duplicates the packaged declaration." >&2
+        echo "pdrive-for-linux: remove it with: sudo rm /usr/local/share/cloud-providers/$INI" >&2
+    fi
+done
+#DEBHELPER#
+exit 0

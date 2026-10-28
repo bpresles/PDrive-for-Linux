@@ -1,0 +1,37 @@
+Source: pdrive-for-linux
+Section: net
+Priority: optional
+Maintainer: Bertrand PRESLES <bpresles@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+ cargo (>= 1.92),
+ rustc (>= 1.92),
+ gcc,
+ make,
+ patchelf,
+ gettext,
+ desktop-file-utils,
+ pkg-config,
+ libnautilus-extension-dev,
+ libgtk-4-dev (>= 4.12),
+ libadwaita-1-dev (>= 1.6),
+ libglib2.0-dev
+Standards-Version: 4.7.0
+Homepage: https://github.com/bpresles/PDrive-for-Linux
+Rules-Requires-Root: no
+
+Package: pdrive-for-linux
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends},
+ fuse3,
+ libnautilus-extension4,
+ gnome-keyring | kwallet6 | keepassxc
+Recommends: gnome-shell-extension-appindicator, nautilus
+Description: Unofficial Proton Drive client (FUSE mount, Nautilus integration)
+ PDrive for Linux mounts Proton Drive as a FUSE file system, with on-demand
+ download, offline pinning, sync state emblems and menu entries in Nautilus, a
+ desktop application (tray icon, status window) that runs the daemon, and a
+ command-line tool.
+ .
+ This is an unofficial third-party client, not affiliated with or endorsed by
+ Proton AG. It bundles the Proton Drive SDK and Proton cryptography libraries
+ (MIT) as private libraries.

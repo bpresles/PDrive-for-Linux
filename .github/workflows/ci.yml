@@ -1,0 +1,21 @@
+# Pull requests and branch pushes: formatting, lints, tests, Nautilus extension.
+# Minimal for now: Nautilus extension build, desktop file, catalogues, version consistency.
+# Left for later: cargo fmt/clippy/test, which need libproton_drive_sdk.so to link (fetch the
+# native archive of a release into native/linux-x64) and a decision on rustfmt/clippy baselines.
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [master]
+permissions:
+  contents: read
+jobs:
+  extension:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libnautilus-extension-dev libgtk-4-dev pkg-config gcc make gettext desktop-file-utils
+      - run: make -C extension
+      - run: desktop-file-validate packaging/io.github.bpresles.PDrive.App.desktop
+      - run: for f in po/*.po; do msgfmt --check -o /dev/null "$f"; done
+      - run: scripts/check-version.sh
