@@ -37,6 +37,15 @@ Dépôt : https://github.com/bpresles/PDrive-for-Linux (privé jusqu'à la fin d
 - [x] Réécrire l'auteur des commits (fait le 27/10/2026) : les premiers portaient une adresse professionnelle, alors que c'est un projet personnel. Les remplacer par `bpresles@gmail.com` avec `git filter-repo --mailmap`, puis forcer le push tant que le dépôt est privé. L'adresse personnelle est déjà configurée localement (`git config user.email`) pour les nouveaux commits.
 - [ ] Éventuellement, renommer la branche `master` en `main`.
 
+### Reste à faire (bilan du 28/10/2026)
+
+- [ ] Captures d'écran pour le README dans `docs/screenshots/` : emblèmes, menu contextuel, barre latérale, fenêtre de statut, icône de notification (marqueurs TODO dans `README.md`).
+- [ ] Inventaire des licences des dépendances NuGet du SDK et des crates de `dotnet-crypto`, à compléter dans `THIRD_PARTY_NOTICES` (mentions « TO COMPLETE »).
+- [ ] Mise en forme du code : le dépôt n'a jamais été formaté avec `cargo fmt`. Faire une passe de formatage, dans un commit à part, avant d'activer `cargo fmt --check` en CI.
+- [ ] Tests en CI : ajouter à `.github/workflows/ci.yml` le job Rust décrit dans la section « Tests automatisés » (dépendances système, bibliothèques natives dans `native/linux-x64/`, clippy `-D warnings`, `cargo test`).
+- [ ] Reporter le nouvel identifiant `io.github.bpresles.PDrive` dans `debian/`, `packaging/rpm/`, `.github/` et `packaging/README.md`, une fois les paquets RPM/DEB terminés.
+- [ ] Tester le passage au nouvel identifiant après installation : quitter l'app, `install.sh`, `install-system.sh`, `nautilus -q`, relancer ; vérifier une seule entrée dans la barre latérale et un seul `pdrived`.
+
 ### README
 
 - [x] Présentation, avec la mention bien visible « client tiers non officiel, non affilié à Proton AG ».
