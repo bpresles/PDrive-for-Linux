@@ -367,3 +367,446 @@ impl Tree {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+    use pdsdk::proto::{string_result, FileNode, FileRevision, FolderNode, StringResult, ThumbnailHeader, ThumbnailType};
+
+    fn mtime(secs: u64) -> SystemTime {
+        UNIX_EPOCH + Duration::from_secs(secs)
+    }
+
+    fn folder(uid: &str, name: &str) -> NodeInfo {
+        NodeInfo { uid: uid.into(), parent_uid: Some("root".into()), name: name.into(), kind: NodeKind::Folder, mtime: mtime(1) }
+    }
+
+    fn file(uid: &str, name: &str, revision: &str) -> NodeInfo {
+        NodeInfo {
+            uid: uid.into(),
+            parent_uid: Some("root".into()),
+            name: name.into(),
+            kind: NodeKind::File { size: 10, revision_uid: revision.into(), has_thumbnail: false },
+            mtime: mtime(2),
+        }
+    }
+
+    fn tree_with(nodes: Vec<NodeInfo>) -> Tree {
+        let mut tree = Tree::new("root".into());
+        tree.set_children(ROOT_INO, nodes);
+        tree
+    }
+
+    fn names(tree: &Tree, ino: u64) -> Vec<String> {
+        let mut names: Vec<String> = tree.children(ino).unwrap().iter().map(|c| tree.get(*c).unwrap().name.clone()).collect();
+        names.sort();
+        names
+    }
+
+    fn is_entry(i: &Invalidation, parent: u64, name: &str) -> bool {
+        matches!(i, Invalidation::Entry(p, n) if *p == parent && n == name)
+    }
+
+    fn is_inode(i: &Invalidation, ino: u64) -> bool {
+        matches!(i, Invalidation::Inode(n) if *n == ino)
+    }
+
+    // --- Conversion of SDK nodes -----------------------------------------------------------
+
+    fn name(value: &str) -> Option<StringResult> {
+        Some(StringResult { result: Some(string_result::Result::Value(value.into())) })
+    }
+
+    fn sdk_file(name_value: Option<StringResult>, revision: Option<FileRevision>) -> Node {
+        Node {
+            kind: Some(node::Kind::File(FileNode {
+                uid: "f".into(),
+                parent_uid: "p".into(),
+                name: name_value,
+                media_type: String::new(),
+                creation_time: Some(Timestamp { seconds: 10, nanos: 0 }),
+                trash_time: None,
+                active_revision: revision,
+                total_storage_size: 99,
+            })),
+        }
+    }
+
+    fn revision() -> FileRevision {
+        FileRevision {
+            uid: "rev".into(),
+            creation_time: Some(Timestamp { seconds: 20, nanos: 0 }),
+            storage_size: 50,
+            claimed_size: Some(42),
+            claimed_modification_time: Some(Timestamp { seconds: 30, nanos: 500 }),
+            thumbnails: vec![],
+        }
+    }
+
+    #[test]
+    fn file_conversion_prefers_claimed_values() {
+        let info = NodeInfo::from_node(sdk_file(name("a.txt"), Some(revision()))).unwrap();
+        assert_eq!((info.uid.as_str(), info.name.as_str(), info.parent_uid.as_deref()), ("f", "a.txt", Some("p")));
+        assert_eq!(info.mtime, UNIX_EPOCH + Duration::new(30, 500));
+        match info.kind {
+            NodeKind::File { size, revision_uid, has_thumbnail } => assert_eq!((size, revision_uid.as_str(), has_thumbnail), (42, "rev", false)),
+            NodeKind::Folder => panic!("a file"),
+        }
+    }
+
+    #[test]
+    fn file_conversion_falls_back_on_storage_size_and_creation_times() {
+        let mut rev = revision();
+        rev.claimed_size = None;
+        rev.claimed_modification_time = None;
+        let info = NodeInfo::from_node(sdk_file(name("a"), Some(rev.clone()))).unwrap();
+        assert_eq!(info.mtime, mtime(20));
+        assert!(matches!(info.kind, NodeKind::File { size: 50, .. }));
+        rev.creation_time = None;
+        assert_eq!(NodeInfo::from_node(sdk_file(name("a"), Some(rev))).unwrap().mtime, mtime(10));
+    }
+
+    #[test]
+    fn negative_sizes_and_times_are_clamped() {
+        let mut rev = revision();
+        rev.claimed_size = Some(-5);
+        rev.claimed_modification_time = Some(Timestamp { seconds: -1, nanos: -1 });
+        let info = NodeInfo::from_node(sdk_file(name("a"), Some(rev))).unwrap();
+        assert!(matches!(info.kind, NodeKind::File { size: 0, .. }));
+        assert_eq!(info.mtime, UNIX_EPOCH);
+    }
+
+    #[test]
+    fn thumbnail_flag_only_counts_small_thumbnails() {
+        let header = |kind: ThumbnailType| ThumbnailHeader { id: "t".into(), r#type: kind as i32 };
+        let mut rev = revision();
+        rev.thumbnails = vec![header(ThumbnailType::Preview)];
+        let info = NodeInfo::from_node(sdk_file(name("a"), Some(rev.clone()))).unwrap();
+        assert!(matches!(info.kind, NodeKind::File { has_thumbnail: false, .. }));
+        rev.thumbnails.push(header(ThumbnailType::Thumbnail));
+        let info = NodeInfo::from_node(sdk_file(name("a"), Some(rev))).unwrap();
+        assert!(matches!(info.kind, NodeKind::File { has_thumbnail: true, .. }));
+    }
+
+    #[test]
+    fn unusable_nodes_are_not_exposed() {
+        // No active revision.
+        assert!(NodeInfo::from_node(sdk_file(name("a"), None)).is_none());
+        // Undecryptable or missing name.
+        assert!(NodeInfo::from_node(sdk_file(None, Some(revision()))).is_none());
+        assert!(NodeInfo::from_node(sdk_file(Some(StringResult { result: None }), Some(revision()))).is_none());
+        // Names that cannot exist in a POSIX directory.
+        for bad in ["", ".", "..", "a/b"] {
+            assert!(NodeInfo::from_node(sdk_file(name(bad), Some(revision()))).is_none(), "{bad:?}");
+        }
+        // Trashed.
+        let mut trashed = sdk_file(name("a"), Some(revision()));
+        if let Some(node::Kind::File(f)) = &mut trashed.kind {
+            f.trash_time = Some(Timestamp { seconds: 1, nanos: 0 });
+        }
+        assert!(NodeInfo::from_node(trashed).is_none());
+        assert!(NodeInfo::from_node(Node { kind: None }).is_none());
+    }
+
+    #[test]
+    fn folder_conversion() {
+        let sdk = |trash: Option<Timestamp>, parent: Option<&str>| Node {
+            kind: Some(node::Kind::Folder(FolderNode {
+                uid: "d".into(),
+                parent_uid: parent.map(Into::into),
+                tree_event_scope_id: String::new(),
+                name: name("docs"),
+                creation_time: Some(Timestamp { seconds: 7, nanos: 0 }),
+                trash_time: trash,
+            })),
+        };
+        let info = NodeInfo::from_node(sdk(None, Some("p"))).unwrap();
+        assert!(matches!(info.kind, NodeKind::Folder));
+        assert_eq!((info.name.as_str(), info.parent_uid.as_deref(), info.mtime), ("docs", Some("p"), mtime(7)));
+        assert!(NodeInfo::from_node(sdk(None, None)).unwrap().parent_uid.is_none());
+        assert!(NodeInfo::from_node(sdk(Some(Timestamp { seconds: 1, nanos: 0 }), Some("p"))).is_none());
+    }
+
+    #[test]
+    fn local_uids_are_recognised() {
+        assert!(is_local("local:12"));
+        assert!(!is_local("volume~node"));
+    }
+
+    // --- Tree -----------------------------------------------------------------------------
+
+    #[test]
+    fn new_tree_has_an_unloaded_root() {
+        let tree = Tree::new("root".into());
+        assert_eq!(tree.ino_of("root"), Some(ROOT_INO));
+        assert!(!tree.is_loaded(ROOT_INO));
+        assert!(tree.children(ROOT_INO).is_none());
+        assert_eq!(tree.path_of(ROOT_INO), Some(PathBuf::new()));
+    }
+
+    #[test]
+    fn listing_a_folder_assigns_inodes_and_allows_lookups() {
+        let tree = tree_with(vec![folder("d", "docs"), file("f", "a.txt", "r1")]);
+        assert!(tree.is_loaded(ROOT_INO));
+        assert_eq!(names(&tree, ROOT_INO), ["a.txt", "docs"]);
+        let ino = tree.child(ROOT_INO, "a.txt").unwrap();
+        assert_ne!(ino, ROOT_INO);
+        assert_eq!(tree.ino_of("f"), Some(ino));
+        assert_eq!(tree.get(ino).unwrap().uid, "f");
+        assert!(tree.child(ROOT_INO, "missing").is_none());
+        // A file has no children.
+        assert!(tree.children(ino).is_none() && !tree.is_loaded(ino));
+    }
+
+    #[test]
+    fn relisting_keeps_inodes_and_drops_vanished_nodes() {
+        let mut tree = tree_with(vec![file("f", "a", "r1"), file("g", "b", "r1")]);
+        let a = tree.ino_of("f").unwrap();
+        tree.set_children(ROOT_INO, vec![file("f", "a2", "r2"), file("h", "c", "r1")]);
+        assert_eq!(tree.ino_of("f"), Some(a));
+        assert_eq!(tree.get(a).unwrap().name, "a2");
+        assert!(matches!(&tree.get(a).unwrap().kind, EntryKind::File { revision_uid, .. } if revision_uid == "r2"));
+        assert!(tree.ino_of("g").is_none());
+        assert_eq!(names(&tree, ROOT_INO), ["a2", "c"]);
+    }
+
+    #[test]
+    fn relisting_keeps_local_files_not_uploaded_yet() {
+        let mut tree = tree_with(vec![file("f", "a", "r1")]);
+        let local = tree.insert_local_file(ROOT_INO, "new.txt".into(), mtime(5));
+        assert!(is_local(&tree.get(local).unwrap().uid));
+        assert_eq!(tree.ino_of(&tree.get(local).unwrap().uid.clone()), Some(local));
+        tree.set_children(ROOT_INO, vec![file("f", "a", "r1")]);
+        assert_eq!(names(&tree, ROOT_INO), ["a", "new.txt"]);
+    }
+
+    #[test]
+    fn relisting_removes_descendants_of_vanished_folders() {
+        let mut tree = tree_with(vec![folder("d", "docs")]);
+        let docs = tree.ino_of("d").unwrap();
+        tree.set_children(docs, vec![file("f", "a", "r"), folder("e", "sub")]);
+        let sub = tree.ino_of("e").unwrap();
+        tree.set_children(sub, vec![file("g", "deep", "r")]);
+        tree.set_children(ROOT_INO, vec![]);
+        for uid in ["d", "f", "e", "g"] {
+            assert!(tree.ino_of(uid).is_none(), "{uid}");
+        }
+        assert!(tree.get(docs).is_none() && tree.get(sub).is_none());
+    }
+
+    #[test]
+    fn node_moved_between_loaded_folders_leaves_the_old_listing() {
+        let mut tree = tree_with(vec![folder("d1", "one"), folder("d2", "two")]);
+        let (one, two) = (tree.ino_of("d1").unwrap(), tree.ino_of("d2").unwrap());
+        tree.set_children(one, vec![file("f", "a", "r")]);
+        let a = tree.ino_of("f").unwrap();
+        tree.set_children(two, vec![file("f", "a", "r")]);
+        assert!(tree.children(one).unwrap().is_empty());
+        assert_eq!(tree.children(two).unwrap(), [a]);
+        assert_eq!(tree.get(a).unwrap().parent, two);
+    }
+
+    #[test]
+    fn relisting_keeps_the_listing_of_loaded_subfolders() {
+        let mut tree = tree_with(vec![folder("d", "docs")]);
+        let docs = tree.ino_of("d").unwrap();
+        tree.set_children(docs, vec![file("f", "a", "r")]);
+        tree.set_children(ROOT_INO, vec![folder("d", "docs")]);
+        assert!(tree.is_loaded(docs));
+    }
+
+    #[test]
+    fn paths_and_lookups_by_path() {
+        let mut tree = tree_with(vec![folder("d", "docs")]);
+        let docs = tree.ino_of("d").unwrap();
+        tree.set_children(docs, vec![file("f", "a.txt", "r")]);
+        let a = tree.ino_of("f").unwrap();
+        assert_eq!(tree.path_of(a), Some(PathBuf::from("docs/a.txt")));
+        assert_eq!(tree.lookup_path(std::path::Path::new("docs/a.txt")), Some(a));
+        assert_eq!(tree.lookup_path(std::path::Path::new("")), Some(ROOT_INO));
+        assert!(tree.lookup_path(std::path::Path::new("docs/none")).is_none());
+        // Unloaded folders are not searched.
+        let mut tree = tree_with(vec![folder("d", "docs")]);
+        assert!(tree.lookup_path(std::path::Path::new("docs/a.txt")).is_none());
+        let docs = tree.ino_of("d").unwrap();
+        tree.remove_ino(docs);
+        assert!(tree.path_of(docs).is_none());
+    }
+
+    #[test]
+    fn size_and_mtime_setters() {
+        let mut tree = tree_with(vec![file("f", "a", "r"), folder("d", "docs")]);
+        let (a, d) = (tree.ino_of("f").unwrap(), tree.ino_of("d").unwrap());
+        tree.set_file_size(a, 77);
+        tree.set_mtime(a, mtime(9));
+        assert!(matches!(tree.get(a).unwrap().kind, EntryKind::File { size: 77, .. }));
+        assert_eq!(tree.get(a).unwrap().mtime, mtime(9));
+        // Sizes only apply to files; unknown inodes are ignored.
+        tree.set_file_size(d, 5);
+        assert!(matches!(tree.get(d).unwrap().kind, EntryKind::Folder { .. }));
+        tree.set_file_size(999, 5);
+        tree.set_mtime(999, mtime(1));
+    }
+
+    #[test]
+    fn local_file_becomes_remote_after_upload() {
+        let mut tree = tree_with(vec![]);
+        let ino = tree.insert_local_file(ROOT_INO, "new".into(), mtime(5));
+        let local_uid = tree.get(ino).unwrap().uid.clone();
+        assert!(matches!(&tree.get(ino).unwrap().kind, EntryKind::File { size: 0, revision_uid, .. } if revision_uid.is_empty()));
+        tree.set_uploaded(ino, "vol~node".into(), "vol~node~rev".into());
+        assert!(tree.ino_of(&local_uid).is_none());
+        assert_eq!(tree.ino_of("vol~node"), Some(ino));
+        assert!(!is_local(&tree.get(ino).unwrap().uid));
+        assert!(matches!(&tree.get(ino).unwrap().kind, EntryKind::File { revision_uid, .. } if revision_uid == "vol~node~rev"));
+        // A new revision of the same node only changes the revision.
+        tree.set_uploaded(ino, "vol~node".into(), "rev2".into());
+        assert!(matches!(&tree.get(ino).unwrap().kind, EntryKind::File { revision_uid, .. } if revision_uid == "rev2"));
+        tree.set_uploaded(999, "x".into(), "y".into());
+    }
+
+    #[test]
+    fn local_inodes_are_never_reused() {
+        let mut tree = tree_with(vec![]);
+        let a = tree.insert_local_file(ROOT_INO, "a".into(), mtime(1));
+        tree.remove_ino(a);
+        let b = tree.insert_local_file(ROOT_INO, "a".into(), mtime(1));
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn move_entry_renames_and_reparents() {
+        let mut tree = tree_with(vec![folder("d", "docs"), file("f", "a", "r")]);
+        let (docs, a) = (tree.ino_of("d").unwrap(), tree.ino_of("f").unwrap());
+        tree.set_children(docs, vec![]);
+        tree.move_entry(a, docs, "b".into());
+        assert_eq!(names(&tree, ROOT_INO), ["docs"]);
+        assert_eq!(names(&tree, docs), ["b"]);
+        assert_eq!(tree.get(a).unwrap().parent, docs);
+        assert_eq!(tree.path_of(a), Some(PathBuf::from("docs/b")));
+        // Rename within a folder.
+        tree.move_entry(a, docs, "c".into());
+        assert_eq!(names(&tree, docs), ["c"]);
+        tree.move_entry(999, docs, "x".into());
+    }
+
+    #[test]
+    fn remove_ino_removes_the_subtree_and_the_listing_entry() {
+        let mut tree = tree_with(vec![folder("d", "docs")]);
+        let docs = tree.ino_of("d").unwrap();
+        tree.set_children(docs, vec![file("f", "a", "r")]);
+        let a = tree.ino_of("f").unwrap();
+        tree.remove_ino(docs);
+        assert!(tree.children(ROOT_INO).unwrap().is_empty());
+        assert!(tree.get(docs).is_none() && tree.get(a).is_none());
+        assert!(tree.ino_of("d").is_none() && tree.ino_of("f").is_none());
+        tree.remove_ino(docs);
+    }
+
+    #[test]
+    fn apply_update_adds_a_new_node() {
+        let mut tree = tree_with(vec![]);
+        let invalidations = tree.apply_update(ROOT_INO, file("f", "a", "r"));
+        let ino = tree.ino_of("f").unwrap();
+        assert_eq!(tree.children(ROOT_INO).unwrap(), [ino]);
+        assert_eq!(invalidations.len(), 2);
+        assert!(is_entry(&invalidations[0], ROOT_INO, "a") && is_inode(&invalidations[1], ROOT_INO));
+    }
+
+    #[test]
+    fn apply_update_into_an_unloaded_folder_does_not_invent_a_listing() {
+        let mut tree = Tree::new("root".into());
+        tree.apply_update(ROOT_INO, file("f", "a", "r"));
+        assert!(!tree.is_loaded(ROOT_INO));
+        assert!(tree.ino_of("f").is_some());
+    }
+
+    #[test]
+    fn apply_update_new_revision_invalidates_the_inode_only() {
+        let mut tree = tree_with(vec![file("f", "a", "r1")]);
+        let a = tree.ino_of("f").unwrap();
+        let invalidations = tree.apply_update(ROOT_INO, file("f", "a", "r2"));
+        assert_eq!(invalidations.len(), 1);
+        assert!(is_inode(&invalidations[0], a));
+        // Same revision: nothing to invalidate.
+        assert!(tree.apply_update(ROOT_INO, file("f", "a", "r2")).is_empty());
+        assert_eq!(tree.children(ROOT_INO).unwrap(), [a]);
+    }
+
+    #[test]
+    fn apply_update_rename_invalidates_old_and_new_names() {
+        let mut tree = tree_with(vec![file("f", "old", "r")]);
+        let a = tree.ino_of("f").unwrap();
+        let invalidations = tree.apply_update(ROOT_INO, file("f", "new", "r"));
+        assert_eq!(invalidations.len(), 4);
+        assert!(is_entry(&invalidations[0], ROOT_INO, "old"));
+        assert!(is_entry(&invalidations[2], ROOT_INO, "new"));
+        assert_eq!(tree.child(ROOT_INO, "new"), Some(a));
+        assert!(tree.child(ROOT_INO, "old").is_none());
+        assert_eq!(tree.children(ROOT_INO).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn apply_update_move_between_folders() {
+        let mut tree = tree_with(vec![folder("d1", "one"), folder("d2", "two")]);
+        let (one, two) = (tree.ino_of("d1").unwrap(), tree.ino_of("d2").unwrap());
+        tree.set_children(one, vec![file("f", "a", "r")]);
+        tree.set_children(two, vec![]);
+        let a = tree.ino_of("f").unwrap();
+        let invalidations = tree.apply_update(two, file("f", "a", "r"));
+        assert!(invalidations.iter().any(|i| is_entry(i, one, "a")) && invalidations.iter().any(|i| is_inode(i, one)));
+        assert!(invalidations.iter().any(|i| is_entry(i, two, "a")) && invalidations.iter().any(|i| is_inode(i, two)));
+        assert!(tree.children(one).unwrap().is_empty());
+        assert_eq!(tree.children(two).unwrap(), [a]);
+        assert_eq!(tree.ino_of("f"), Some(a));
+    }
+
+    #[test]
+    fn apply_update_replaces_a_node_with_the_same_name() {
+        let mut tree = tree_with(vec![file("f", "a", "r1")]);
+        let old = tree.ino_of("f").unwrap();
+        tree.apply_update(ROOT_INO, file("g", "a", "r2"));
+        assert!(tree.get(old).is_none() && tree.ino_of("f").is_none());
+        let new = tree.ino_of("g").unwrap();
+        assert_eq!(tree.children(ROOT_INO).unwrap(), [new]);
+    }
+
+    #[test]
+    fn apply_update_of_a_folder_keeps_its_loaded_listing() {
+        let mut tree = tree_with(vec![folder("d", "docs")]);
+        let docs = tree.ino_of("d").unwrap();
+        tree.set_children(docs, vec![file("f", "a", "r")]);
+        tree.apply_update(ROOT_INO, folder("d", "documents"));
+        assert!(tree.is_loaded(docs));
+        assert_eq!(tree.get(docs).unwrap().name, "documents");
+        assert_eq!(names(&tree, docs), ["a"]);
+    }
+
+    #[test]
+    fn remove_uid_invalidates_and_ignores_unknown_or_root() {
+        let mut tree = tree_with(vec![file("f", "a", "r")]);
+        let invalidations = tree.remove_uid("f");
+        assert_eq!(invalidations.len(), 2);
+        assert!(is_entry(&invalidations[0], ROOT_INO, "a") && is_inode(&invalidations[1], ROOT_INO));
+        assert!(tree.children(ROOT_INO).unwrap().is_empty());
+        assert!(tree.remove_uid("f").is_empty());
+        assert!(tree.remove_uid("root").is_empty());
+        assert!(tree.ino_of("root").is_some());
+    }
+
+    #[test]
+    fn reset_listings_invalidates_loaded_folders_only() {
+        let mut tree = tree_with(vec![folder("d", "docs"), folder("e", "other")]);
+        let docs = tree.ino_of("d").unwrap();
+        tree.set_children(docs, vec![]);
+        let mut invalidated: Vec<u64> = tree.reset_listings().iter().map(|i| if let Invalidation::Inode(n) = i { *n } else { panic!("inode only") }).collect();
+        invalidated.sort();
+        assert_eq!(invalidated, [ROOT_INO, docs]);
+        assert!(!tree.is_loaded(ROOT_INO) && !tree.is_loaded(docs));
+        // Nodes themselves are kept, inodes stay stable.
+        assert_eq!(tree.ino_of("d"), Some(docs));
+        assert!(tree.reset_listings().is_empty());
+    }
+}

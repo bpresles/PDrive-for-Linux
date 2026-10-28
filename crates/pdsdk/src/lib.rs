@@ -641,3 +641,67 @@ impl DriveClient {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn error(message: &str, domain: ErrorDomain, inner: Option<proto::Error>) -> proto::Error {
+        proto::Error {
+            r#type: String::new(),
+            message: message.into(),
+            domain: domain as i32,
+            primary_code: Some(2501),
+            secondary_code: None,
+            context: None,
+            inner_error: inner.map(Box::new),
+        }
+    }
+
+    #[test]
+    fn sdk_error_chains_inner_messages() {
+        let inner = error("middle", ErrorDomain::Network, Some(error("root cause", ErrorDomain::Transport, None)));
+        match SdkError::from(error("outer", ErrorDomain::Api, Some(inner))) {
+            SdkError::Sdk { domain, message, code } => {
+                assert_eq!(domain, ErrorDomain::Api);
+                assert_eq!(message, "outer <- middle <- root cause");
+                assert_eq!(code, Some(2501));
+            }
+            other => panic!("{other}"),
+        }
+    }
+
+    #[test]
+    fn unknown_error_domain_is_undefined() {
+        let mut e = error("x", ErrorDomain::Api, None);
+        e.domain = 12345;
+        assert!(matches!(SdkError::from(e), SdkError::Sdk { domain: ErrorDomain::Undefined, .. }));
+    }
+
+    #[test]
+    fn unpack_decodes_the_value_of_an_any() {
+        let message = proto::Timestamp { seconds: 5, nanos: 6 };
+        let any = Any { type_url: "type.googleapis.com/x".into(), value: message.encode_to_vec() };
+        assert_eq!(unpack::<proto::Timestamp>(Some(any)).unwrap(), message);
+        assert!(matches!(unpack::<proto::Timestamp>(None), Err(SdkError::Protocol(_))));
+        let bad = Any { type_url: "t".into(), value: vec![0xff, 0xff] };
+        assert!(matches!(unpack::<proto::Timestamp>(Some(bad)), Err(SdkError::Protocol(_))));
+    }
+
+    #[test]
+    fn byte_array_of_nothing_is_an_empty_slice() {
+        let null = ByteArray { pointer: std::ptr::null(), length: 3 };
+        assert!(unsafe { null.as_slice() }.is_empty());
+        let data = [1u8, 2, 3];
+        assert_eq!(unsafe { ByteArray::new(&data).as_slice() }, &data);
+    }
+
+    #[test]
+    fn string_result_display() {
+        use proto::{string_result::Result as R, StringResult};
+        assert_eq!(StringResult { result: Some(R::Value("a".into())) }.display(), "a");
+        assert_eq!(StringResult { result: None }.display(), "<missing>");
+        let failed = StringResult { result: Some(R::Error(proto::DriveError { message: Some("bad key".into()), inner_error: None })) };
+        assert_eq!(failed.display(), "<error: bad key>");
+    }
+}

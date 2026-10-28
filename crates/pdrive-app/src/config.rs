@@ -36,11 +36,18 @@ fn settings_path() -> PathBuf {
 }
 
 fn read_document() -> DocumentMut {
-    std::fs::read_to_string(settings_path()).ok().and_then(|text| text.parse().ok()).unwrap_or_default()
+    parse(&std::fs::read_to_string(settings_path()).unwrap_or_default())
+}
+
+fn parse(text: &str) -> DocumentMut {
+    text.parse().unwrap_or_default()
 }
 
 pub fn load() -> Settings {
-    let document = read_document();
+    settings_of(&read_document())
+}
+
+fn settings_of(document: &DocumentMut) -> Settings {
     let defaults = Settings::default();
     Settings {
         mountpoint: document.get("mountpoint").and_then(|v| v.as_str()).map_or(defaults.mountpoint, str::to_owned),
@@ -67,15 +74,23 @@ fn set(document: &mut DocumentMut, key: &str, mut value: Value) {
 
 pub fn save(settings: &Settings) -> Result<()> {
     let mut document = read_document();
-    set(&mut document, "mountpoint", Value::from(settings.mountpoint.as_str()));
-    let size = if settings.cache_size_gib.fract() == 0.0 { Value::from(settings.cache_size_gib as i64) } else { Value::from(settings.cache_size_gib) };
-    set(&mut document, "cache_size_gib", size);
+    apply(&mut document, settings);
     write_document(&document)
+}
+
+fn apply(document: &mut DocumentMut, settings: &Settings) {
+    set(document, "mountpoint", Value::from(settings.mountpoint.as_str()));
+    let size = if settings.cache_size_gib.fract() == 0.0 { Value::from(settings.cache_size_gib as i64) } else { Value::from(settings.cache_size_gib) };
+    set(document, "cache_size_gib", size);
 }
 
 /// Whether a launch (other than `--background`) opens the status window; on by default.
 pub fn show_window_at_startup() -> bool {
-    read_document().get("show_window_at_startup").and_then(|v| v.as_bool()).unwrap_or(true)
+    show_window_of(&read_document())
+}
+
+fn show_window_of(document: &DocumentMut) -> bool {
+    document.get("show_window_at_startup").and_then(|v| v.as_bool()).unwrap_or(true)
 }
 
 pub fn set_show_window_at_startup(show: bool) -> Result<()> {
@@ -135,4 +150,71 @@ pub fn set_autostart(enabled: bool) -> Result<()> {
     );
     std::fs::create_dir_all(path.parent().context("no parent directory")?)?;
     std::fs::write(&path, entry).with_context(|| format!("cannot write {}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const COMMENTED: &str = "# Where \"My files\" is mounted.\nmountpoint = \"~/ProtonDrive\" # trailing\n\n# Size of the cache.\ncache_size_gib = 10\n# Window.\nshow_window_at_startup = false\n";
+
+    #[test]
+    fn defaults_when_the_file_is_empty_or_invalid() {
+        for text in ["", "this is = not [valid"] {
+            let settings = settings_of(&parse(text));
+            assert_eq!(settings.mountpoint, "~/ProtonDrive");
+            assert_eq!(settings.cache_size_gib, 10.0);
+            assert!(show_window_of(&parse(text)));
+        }
+    }
+
+    #[test]
+    fn show_window_at_startup_defaults_to_true_and_reads_false() {
+        assert!(show_window_of(&parse("mountpoint = \"x\"\n")));
+        assert!(!show_window_of(&parse("show_window_at_startup = false\n")));
+        assert!(show_window_of(&parse("show_window_at_startup = true\n")));
+        // A value of the wrong type is ignored.
+        assert!(show_window_of(&parse("show_window_at_startup = \"no\"\n")));
+    }
+
+    #[test]
+    fn reads_integer_and_float_sizes() {
+        assert_eq!(settings_of(&parse("cache_size_gib = 4\n")).cache_size_gib, 4.0);
+        assert_eq!(settings_of(&parse("cache_size_gib = 0.5\n")).cache_size_gib, 0.5);
+        assert_eq!(settings_of(&parse("mountpoint = \"/mnt/x\"\n")).mountpoint, "/mnt/x");
+    }
+
+    #[test]
+    fn saving_preserves_comments_layout_and_other_keys() {
+        let mut document = parse(COMMENTED);
+        apply(&mut document, &Settings { mountpoint: "/mnt/drive".into(), cache_size_gib: 2.5 });
+        let text = document.to_string();
+        assert_eq!(
+            text,
+            "# Where \"My files\" is mounted.\nmountpoint = \"/mnt/drive\" # trailing\n\n# Size of the cache.\ncache_size_gib = 2.5\n# Window.\nshow_window_at_startup = false\n"
+        );
+        assert!(!show_window_of(&parse(&text)));
+    }
+
+    #[test]
+    fn whole_sizes_are_written_as_integers() {
+        let mut document = parse("");
+        apply(&mut document, &Settings { mountpoint: "~/D".into(), cache_size_gib: 20.0 });
+        assert_eq!(document.to_string(), "mountpoint = \"~/D\"\ncache_size_gib = 20\n");
+        let settings = settings_of(&parse(&document.to_string()));
+        assert_eq!((settings.mountpoint.as_str(), settings.cache_size_gib), ("~/D", 20.0));
+    }
+
+    #[test]
+    fn setting_the_window_flag_keeps_its_comment() {
+        let mut document = parse(COMMENTED);
+        set(&mut document, "show_window_at_startup", Value::from(true));
+        assert!(document.to_string().contains("# Window.\nshow_window_at_startup = true\n"));
+        assert!(show_window_of(&document));
+        // Added when absent.
+        let mut document = parse("mountpoint = \"x\"\n");
+        set(&mut document, "show_window_at_startup", Value::from(false));
+        assert!(!show_window_of(&parse(&document.to_string())));
+        assert!(document.to_string().starts_with("mountpoint = \"x\"\n"));
+    }
 }

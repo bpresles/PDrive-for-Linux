@@ -79,3 +79,46 @@ pub fn xdg_dir(variable: &str, default: &str) -> Result<PathBuf> {
         _ => home()?.join(default),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn defaults() {
+        let settings: Settings = toml::from_str("").unwrap();
+        assert_eq!(settings.mountpoint, "~/ProtonDrive");
+        assert_eq!(settings.cache_size_gib, 10.0);
+        assert!(settings.show_window_at_startup);
+    }
+
+    #[test]
+    fn documented_example_parses() {
+        let text = "# comment\nmountpoint = \"/mnt/drive\"\ncache_size_gib = 2.5\nshow_window_at_startup = false\n";
+        let settings: Settings = toml::from_str(text).unwrap();
+        assert_eq!(settings.mountpoint, "/mnt/drive");
+        assert_eq!(settings.cache_size_gib, 2.5);
+        assert!(!settings.show_window_at_startup);
+        // An integer is accepted for the size, as written by the application.
+        assert_eq!(toml::from_str::<Settings>("cache_size_gib = 10").unwrap().cache_size_gib, 10.0);
+    }
+
+    #[test]
+    fn unknown_keys_are_rejected() {
+        assert!(toml::from_str::<Settings>("cache = 1").is_err());
+    }
+
+    #[test]
+    fn cache_size_in_bytes() {
+        let size = |gib| Settings { cache_size_gib: gib, ..Settings::default() }.cache_size_bytes();
+        assert_eq!(size(1.0), 1 << 30);
+        assert_eq!(size(0.5), 1 << 29);
+        assert_eq!(size(-3.0), 0);
+    }
+
+    #[test]
+    fn home_expansion_leaves_other_paths_alone() {
+        assert_eq!(expand_home("/abs/path").unwrap(), PathBuf::from("/abs/path"));
+        assert_eq!(expand_home("rel/path").unwrap(), PathBuf::from("rel/path"));
+    }
+}

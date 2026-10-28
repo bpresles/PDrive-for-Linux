@@ -136,3 +136,84 @@ impl ActivityLog {
         self.lock().1.iter().cloned().collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn most_recent_entry_comes_first() {
+        let log = ActivityLog::default();
+        log.record(Kind::Trash, "a", 0);
+        log.record(Kind::Rename, "b", 0);
+        let recent = log.recent();
+        assert_eq!(recent.iter().map(|e| e.path.as_str()).collect::<Vec<_>>(), ["b", "a"]);
+        assert!(recent.iter().all(|e| e.state == State::Done));
+    }
+
+    #[test]
+    fn begin_then_finish_updates_the_entry() {
+        let log = ActivityLog::default();
+        let id = log.begin(Kind::Upload, "f", 10);
+        assert_eq!(log.recent()[0].state, State::Running);
+        log.finish(id, State::Failed);
+        let entry = &log.recent()[0];
+        assert_eq!((entry.id, entry.state, entry.size, entry.kind), (id, State::Failed, 10, Kind::Upload));
+        // Finishing an unknown id is harmless.
+        log.finish(9999, State::Done);
+        assert_eq!(log.recent().len(), 1);
+    }
+
+    #[test]
+    fn ids_are_unique_and_discard_removes() {
+        let log = ActivityLog::default();
+        let a = log.begin(Kind::Download, "a", 0);
+        let b = log.begin(Kind::Download, "b", 0);
+        assert_ne!(a, b);
+        log.discard(a);
+        assert_eq!(log.recent().iter().map(|e| e.id).collect::<Vec<_>>(), [b]);
+    }
+
+    #[test]
+    fn journal_is_bounded_and_drops_the_oldest_finished_entries() {
+        let log = ActivityLog::default();
+        for i in 0..CAPACITY + 10 {
+            log.record(Kind::Upload, format!("f{i}"), 0);
+        }
+        let recent = log.recent();
+        assert_eq!(recent.len(), CAPACITY);
+        assert_eq!(recent[0].path, format!("f{}", CAPACITY + 9));
+        assert_eq!(recent[CAPACITY - 1].path, "f10");
+    }
+
+    #[test]
+    fn running_entries_survive_the_cleanup() {
+        let log = ActivityLog::default();
+        let running = log.begin(Kind::Download, "running", 0);
+        for i in 0..CAPACITY * 2 {
+            log.record(Kind::Upload, format!("f{i}"), 0);
+        }
+        let recent = log.recent();
+        assert_eq!(recent.len(), CAPACITY);
+        assert!(recent.iter().any(|e| e.id == running));
+    }
+
+    #[test]
+    fn when_everything_runs_the_oldest_is_dropped() {
+        let log = ActivityLog::default();
+        for i in 0..CAPACITY + 1 {
+            log.begin(Kind::Download, format!("f{i}"), 0);
+        }
+        let recent = log.recent();
+        assert_eq!(recent.len(), CAPACITY);
+        assert!(recent.iter().all(|e| e.path != "f0"));
+    }
+
+    #[test]
+    fn names_are_stable_for_dbus_clients() {
+        assert_eq!(Kind::RemoteCreated.as_str(), "remote-created");
+        assert_eq!(Kind::Upload.as_str(), "upload");
+        assert_eq!(State::Running.as_str(), "running");
+        assert_eq!(State::Failed.as_str(), "failed");
+    }
+}

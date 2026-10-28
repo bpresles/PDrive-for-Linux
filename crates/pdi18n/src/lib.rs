@@ -58,9 +58,60 @@ pub fn tr_n(singular: &str, plural: &str, n: u32, args: &[&str]) -> String {
     fill(ngettext(singular, plural, n), args)
 }
 
-fn fill(mut text: String, args: &[&str]) -> String {
-    for arg in args {
-        text = text.replacen("{}", arg, 1);
+fn fill(text: String, args: &[&str]) -> String {
+    // One pass: a placeholder inside an argument (e.g. a file name) is never substituted again.
+    let mut result = String::with_capacity(text.len());
+    let mut args = args.iter();
+    let mut rest = text.as_str();
+    while let Some(position) = rest.find("{}") {
+        let Some(arg) = args.next() else { break };
+        result.push_str(&rest[..position]);
+        result.push_str(arg);
+        rest = &rest[position + 2..];
     }
-    text
+    result.push_str(rest);
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fill_replaces_placeholders_in_order() {
+        assert_eq!(fill("{} of {}".into(), &["1", "2"]), "1 of 2");
+        assert_eq!(fill("no placeholder".into(), &["x"]), "no placeholder");
+        assert_eq!(fill(String::new(), &[]), "");
+    }
+
+    #[test]
+    fn fill_keeps_unmatched_placeholders_and_ignores_extra_arguments() {
+        assert_eq!(fill("{} and {}".into(), &["a"]), "a and {}");
+        assert_eq!(fill("{}".into(), &["a", "b"]), "a");
+    }
+
+    #[test]
+    fn fill_does_not_substitute_inside_arguments() {
+        assert_eq!(fill("{} / {}".into(), &["{}", "x"]), "{} / x");
+    }
+
+    #[test]
+    fn fill_keeps_multibyte_text() {
+        assert_eq!(fill("é {} ü".into(), &["→"]), "é → ü");
+    }
+
+    // Without a bound catalogue, gettext returns the English text.
+    #[test]
+    fn tr_fmt_formats_the_untranslated_message() {
+        assert_eq!(tr("Hello"), "Hello");
+        assert_eq!(tr_fmt("Moved {} to {}", &["a", "b"]), "Moved a to b");
+    }
+
+    #[test]
+    fn tr_n_picks_the_plural_form() {
+        let text = |n: u32| tr_n("{} file", "{} files", n, &[&n.to_string()]);
+        assert_eq!(text(0), "0 files");
+        assert_eq!(text(1), "1 file");
+        assert_eq!(text(2), "2 files");
+    }
 }

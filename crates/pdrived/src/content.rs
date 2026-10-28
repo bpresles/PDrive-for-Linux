@@ -72,6 +72,16 @@ impl Drop for Transfer {
     }
 }
 
+/// A download that did not complete: keeps what was received as the head of the file if it is
+/// long enough to serve sniffing reads later, otherwise drops it.
+fn keep_head(partial: &std::path::Path, head: &std::path::Path, written: u64) {
+    if written >= HEAD_LENGTH {
+        let _ = std::fs::rename(partial, head);
+    } else {
+        let _ = std::fs::remove_file(partial);
+    }
+}
+
 pub enum Opened {
     Complete(File),
     /// The beginning of the content (`len` bytes), without download in progress.
@@ -229,12 +239,7 @@ impl ContentCache {
                 on_complete(written);
                 Progress::Done
             } else {
-                if written >= HEAD_LENGTH {
-                    // Keep what was received to serve sniffing reads later.
-                    let _ = std::fs::rename(&partial, &head);
-                } else {
-                    let _ = std::fs::remove_file(&partial);
-                }
+                keep_head(&partial, &head, written);
                 if let Err(e) = &result
                     && !task_transfer.cancelled.load(Ordering::SeqCst) {
                         eprintln!("cannot download revision {revision_uid}: {e}");
@@ -302,5 +307,228 @@ impl ContentCache {
                 transfer.cancel();
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+    use std::time::{Duration, SystemTime};
+
+    fn cache(dir: &std::path::Path) -> Arc<ContentCache> {
+        Arc::new(ContentCache::new(dir.to_owned(), tokio::runtime::Handle::current(), Arc::new(ActivityLog::default()), false))
+    }
+
+    /// Writes `size` bytes in the cache file `path`, last used `age` seconds ago.
+    fn put(path: &std::path::Path, size: usize, age: u64) {
+        std::fs::write(path, vec![0u8; size]).unwrap();
+        File::options().write(true).open(path).unwrap().set_modified(SystemTime::now() - Duration::from_secs(age)).unwrap();
+    }
+
+    fn names(dir: &std::path::Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+        names.sort();
+        names
+    }
+
+    #[tokio::test]
+    async fn cache_file_names_are_hashes_of_the_revision_uid() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = cache(dir.path());
+        let long_uid = "volume~".repeat(100);
+        let path = cache.path_for(&long_uid);
+        let name = path.file_name().unwrap().to_str().unwrap();
+        assert_eq!(name.len(), 64);
+        assert!(name.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()));
+        assert_eq!(path, cache.path_for(&long_uid));
+        assert_ne!(path, cache.path_for("other"));
+        // SHA-256 of the empty string, to pin the algorithm.
+        assert_eq!(cache.path_for("").file_name().unwrap(), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    }
+
+    #[tokio::test]
+    async fn adopt_takes_a_file_as_the_content_of_a_revision() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = cache(dir.path());
+        let source = dir.path().join("upload.snapshot");
+        std::fs::write(&source, b"content").unwrap();
+        assert!(!cache.is_cached("rev"));
+        cache.adopt("rev", &source);
+        assert!(cache.is_cached("rev") && cache.has_head("rev"));
+        assert!(!source.exists());
+        assert_eq!(std::fs::read(cache.path_for("rev")).unwrap(), b"content");
+    }
+
+    #[tokio::test]
+    async fn adopt_replaces_previous_content_and_drops_the_source_on_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = cache(dir.path());
+        std::fs::write(cache.path_for("rev"), b"old").unwrap();
+        let source = dir.path().join("snapshot");
+        std::fs::write(&source, b"new").unwrap();
+        cache.adopt("rev", &source);
+        assert_eq!(std::fs::read(cache.path_for("rev")).unwrap(), b"new");
+        // Rename impossible (target is a non-empty directory): the source is removed anyway.
+        let blocked = cache.path_for("blocked");
+        std::fs::create_dir(&blocked).unwrap();
+        std::fs::write(blocked.join("x"), b"x").unwrap();
+        std::fs::write(&source, b"data").unwrap();
+        cache.adopt("blocked", &source);
+        assert!(!source.exists());
+    }
+
+    #[tokio::test]
+    async fn evict_removes_content_and_head() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = cache(dir.path());
+        let path = cache.path_for("rev");
+        std::fs::write(&path, b"x").unwrap();
+        std::fs::write(path.with_extension("head"), b"x").unwrap();
+        std::fs::write(cache.path_for("other"), b"x").unwrap();
+        cache.evict("rev");
+        assert!(!cache.has_head("rev"));
+        assert_eq!(names(dir.path()).len(), 1);
+        // Evicting what is absent is harmless.
+        cache.evict("nothing");
+    }
+
+    #[tokio::test]
+    async fn has_head_is_true_for_a_head_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = cache(dir.path());
+        assert!(!cache.has_head("rev"));
+        std::fs::write(cache.path_for("rev").with_extension("head"), b"x").unwrap();
+        assert!(cache.has_head("rev") && !cache.is_cached("rev"));
+    }
+
+    #[tokio::test]
+    async fn purge_does_nothing_under_the_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = cache(dir.path());
+        put(&cache.path_for("a"), 100, 10);
+        put(&cache.path_for("b"), 100, 20);
+        cache.purge(200, &HashSet::new());
+        assert_eq!(names(dir.path()).len(), 2);
+    }
+
+    #[tokio::test]
+    async fn purge_removes_least_recently_used_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = cache(dir.path());
+        put(&cache.path_for("old"), 100, 300);
+        put(&cache.path_for("mid"), 100, 200);
+        put(&cache.path_for("new"), 100, 100);
+        cache.purge(150, &HashSet::new());
+        // 300 bytes, limit 150: the two oldest go.
+        assert!(!cache.is_cached("old") && !cache.is_cached("mid") && cache.is_cached("new"));
+        cache.purge(0, &HashSet::new());
+        assert!(names(dir.path()).is_empty());
+    }
+
+    #[tokio::test]
+    async fn purge_keeps_pinned_revisions_even_over_the_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = cache(dir.path());
+        put(&cache.path_for("pinned"), 100, 1000);
+        put(&cache.path_for("free"), 100, 10);
+        cache.purge(0, &HashSet::from(["pinned".to_owned()]));
+        assert!(cache.is_cached("pinned") && !cache.is_cached("free"));
+    }
+
+    #[tokio::test]
+    async fn purge_ignores_pinned_size_in_the_limit() {
+        // Pinned content is not counted: the limit applies to what can be purged.
+        let dir = tempfile::tempdir().unwrap();
+        let cache = cache(dir.path());
+        put(&cache.path_for("pinned"), 1000, 1000);
+        put(&cache.path_for("free"), 100, 10);
+        cache.purge(100, &HashSet::from(["pinned".to_owned()]));
+        assert!(cache.is_cached("pinned") && cache.is_cached("free"));
+    }
+
+    #[tokio::test]
+    async fn purge_removes_heads_but_never_partial_downloads() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = cache(dir.path());
+        let (a, b) = (cache.path_for("a"), cache.path_for("b"));
+        put(&a.with_extension("head"), 100, 500);
+        put(&b.with_extension("part"), 100, 900);
+        put(&b, 100, 10);
+        cache.purge(100, &HashSet::new());
+        assert!(!a.with_extension("head").exists());
+        assert!(b.with_extension("part").exists() && b.exists());
+        // Unknown extensions are left alone too.
+        put(&dir.path().join("note.txt"), 100, 900);
+        cache.purge(0, &HashSet::new());
+        assert_eq!(names(dir.path()).len(), 2);
+    }
+
+    #[tokio::test]
+    async fn purge_tolerates_a_missing_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        cache(&dir.path().join("absent")).purge(0, &HashSet::new());
+    }
+
+    #[test]
+    fn keep_head_keeps_a_long_enough_beginning() {
+        let dir = tempfile::tempdir().unwrap();
+        let (partial, head) = (dir.path().join("x.part"), dir.path().join("x.head"));
+        std::fs::write(&partial, vec![1u8; HEAD_LENGTH as usize]).unwrap();
+        keep_head(&partial, &head, HEAD_LENGTH);
+        assert!(!partial.exists());
+        assert_eq!(std::fs::metadata(&head).unwrap().len(), HEAD_LENGTH);
+    }
+
+    #[test]
+    fn keep_head_drops_a_short_beginning() {
+        let dir = tempfile::tempdir().unwrap();
+        let (partial, head) = (dir.path().join("x.part"), dir.path().join("x.head"));
+        std::fs::write(&partial, vec![1u8; HEAD_LENGTH as usize - 1]).unwrap();
+        keep_head(&partial, &head, HEAD_LENGTH - 1);
+        assert!(!partial.exists() && !head.exists());
+    }
+
+    fn transfer(receiver: watch::Receiver<Progress>) -> Transfer {
+        Transfer {
+            progress: receiver,
+            readers: AtomicUsize::new(1),
+            cancelled: AtomicBool::new(false),
+            cancellation: None,
+            runtime: tokio::runtime::Handle::current(),
+        }
+    }
+
+    #[tokio::test]
+    async fn wait_for_returns_when_the_range_is_written() {
+        let (sender, receiver) = watch::channel(Progress::Running(0));
+        let transfer = Arc::new(transfer(receiver));
+        let waiter = tokio::spawn({
+            let transfer = transfer.clone();
+            async move { transfer.wait_for(10).await }
+        });
+        tokio::task::yield_now().await;
+        sender.send_replace(Progress::Running(5));
+        tokio::task::yield_now().await;
+        assert!(!waiter.is_finished());
+        sender.send_replace(Progress::Running(10));
+        assert!(waiter.await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn wait_for_follows_the_end_of_the_download() {
+        let (sender, receiver) = watch::channel(Progress::Done);
+        assert!(transfer(receiver).wait_for(u64::MAX).await);
+        sender.send_replace(Progress::Failed);
+        let (_sender, receiver) = watch::channel(Progress::Failed);
+        assert!(!transfer(receiver).wait_for(0).await);
+    }
+
+    #[tokio::test]
+    async fn wait_for_fails_if_the_download_task_vanishes() {
+        let (sender, receiver) = watch::channel(Progress::Running(0));
+        let transfer = transfer(receiver);
+        drop(sender);
+        assert!(!transfer.wait_for(1).await);
     }
 }

@@ -12,6 +12,8 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
     println!("cargo:rustc-link-lib=dylib=proton_drive_sdk");
     println!("cargo:rustc-env=PDSDK_DEFAULT_LIB_DIR={}", lib_dir.display());
+    // Development convenience: tests of this crate find the library at run time without LD_LIBRARY_PATH.
+    println!("cargo:rustc-link-arg-tests=-Wl,-rpath,{}", lib_dir.display());
     // Exposed to dependent build scripts as DEP_PROTON_DRIVE_SDK_LIB_DIR (e.g. to set an rpath).
     println!("cargo:lib_dir={}", lib_dir.display());
 }

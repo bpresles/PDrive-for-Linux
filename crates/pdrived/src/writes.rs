@@ -528,9 +528,9 @@ impl Drive {
                 continue;
             }
             let data = self.staging.dir.join(format!("{key}.data"));
-            let journal: Journal = match std::fs::read(&journal_path).ok().and_then(|j| serde_json::from_slice::<Journal>(&j).ok()) {
-                Some(journal) if data.exists() && !is_temporary(&journal.name) => journal,
-                _ => {
+            let journal: Journal = match load_journal(&journal_path, &data) {
+                Some(journal) => journal,
+                None => {
                     let _ = std::fs::remove_file(&journal_path);
                     let _ = std::fs::remove_file(&data);
                     continue;
@@ -547,20 +547,7 @@ impl Drive {
                 Err(e) => eprintln!("[recovery] cannot upload {} yet: {e}", journal.name),
             }
         }
-        // Content left without a journal comes from files that were never closed: keep it aside.
-        if let Ok(entries) = std::fs::read_dir(&self.staging.dir) {
-            for path in entries.filter_map(|e| e.ok().map(|e| e.path())) {
-                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_owned();
-                if name.starts_with(&format!("{}-", self.staging.session)) {
-                    continue;
-                }
-                if name.contains(".upload.") || name.ends_with(".tmp") {
-                    let _ = std::fs::remove_file(&path);
-                } else if name.ends_with(".data") && !path.with_extension("json").exists() {
-                    eprintln!("[recovery] unsaved content without destination kept in {}", path.display());
-                }
-            }
-        }
+        sweep_leftovers(&self.staging.dir, &self.staging.session);
     }
 
     /// Uploads a journaled staging file; returns the name it got.
@@ -597,6 +584,10 @@ fn is_transient(error: &SdkError) -> bool {
 /// "report.odt" → "report (conflict 2026-10-27 22.15).odt"
 fn conflict_name(name: &str) -> String {
     let stamp = glib::DateTime::now_local().and_then(|d| d.format("%Y-%m-%d %H.%M")).map(|s| s.to_string()).unwrap_or_default();
+    conflict_name_at(name, &stamp)
+}
+
+fn conflict_name_at(name: &str, stamp: &str) -> String {
     match name.rfind('.').filter(|&i| i > 0) {
         Some(dot) => format!("{} (conflict {stamp}){}", &name[..dot], &name[dot..]),
         None => format!("{name} (conflict {stamp})"),
@@ -612,3 +603,178 @@ fn media_type(name: &str, path: &std::path::Path) -> String {
     gio::content_type_get_mime_type(&content_type).map_or_else(|| "application/octet-stream".to_owned(), |m| m.to_string())
 }
 
+
+/// Reads the journal of a staging file; none if it is unreadable, if the content is missing or if
+/// it belongs to an editor temporary file (never uploaded).
+fn load_journal(journal_path: &std::path::Path, data: &std::path::Path) -> Option<Journal> {
+    let journal = std::fs::read(journal_path).ok().and_then(|j| serde_json::from_slice::<Journal>(&j).ok())?;
+    (data.exists() && !is_temporary(&journal.name)).then_some(journal)
+}
+
+/// Cleans up what a previous run (any session but `session`) left in the staging folder: upload
+/// snapshots and temporary files are removed; content without a journal is kept aside.
+fn sweep_leftovers(dir: &std::path::Path, session: &str) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for path in entries.filter_map(|e| e.ok().map(|e| e.path())) {
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_owned();
+        if name.starts_with(&format!("{session}-")) {
+            continue;
+        }
+        if name.contains(".upload.") || name.ends_with(".tmp") {
+            let _ = std::fs::remove_file(&path);
+        } else if name.ends_with(".data") && !path.with_extension("json").exists() {
+            eprintln!("[recovery] unsaved content without destination kept in {}", path.display());
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn journal(name: &str) -> Journal {
+        Journal { file_uid: Some("vol~file".into()), base_revision_uid: Some("vol~file~rev".into()), parent_uid: "vol~dir".into(), name: name.into(), mtime: 1_700_000_000 }
+    }
+
+    #[test]
+    fn temporary_files_are_recognised() {
+        for name in [".~lock.report.odt#", ".goutputstream-ABC123", ".#notes.txt", "notes.txt~", "a.swp", "a.swo", "a.swx", "a.kate-swp", "movie.mkv.part", "x.crdownload"] {
+            assert!(is_temporary(name), "{name} should be temporary");
+        }
+        for name in ["report.odt", "swp", "notes.txt", "a.part.txt", "~notes", ".bashrc", "lock"] {
+            assert!(!is_temporary(name), "{name} should not be temporary");
+        }
+    }
+
+    #[test]
+    fn conflict_name_keeps_the_extension() {
+        assert_eq!(conflict_name_at("report.odt", "2026-10-27 22.15"), "report (conflict 2026-10-27 22.15).odt");
+        assert_eq!(conflict_name_at("archive.tar.gz", "S"), "archive.tar (conflict S).gz");
+    }
+
+    #[test]
+    fn conflict_name_without_extension_or_with_leading_dot() {
+        assert_eq!(conflict_name_at("Makefile", "S"), "Makefile (conflict S)");
+        assert_eq!(conflict_name_at(".bashrc", "S"), ".bashrc (conflict S)");
+    }
+
+    #[test]
+    fn conflict_name_uses_the_local_time_format() {
+        let name = conflict_name("a.txt");
+        let stamp = name.strip_prefix("a (conflict ").and_then(|n| n.strip_suffix(").txt")).expect("name shape");
+        // YYYY-MM-DD HH.MM
+        let bytes = stamp.as_bytes();
+        assert_eq!(bytes.len(), 16, "{stamp}");
+        assert!(bytes[4] == b'-' && bytes[7] == b'-' && bytes[10] == b' ' && bytes[13] == b'.', "{stamp}");
+    }
+
+    #[test]
+    fn journal_roundtrip() {
+        let original = journal("é report.odt");
+        let json = serde_json::to_vec(&original).unwrap();
+        let back: Journal = serde_json::from_slice(&json).unwrap();
+        assert_eq!(back.file_uid, original.file_uid);
+        assert_eq!(back.base_revision_uid, original.base_revision_uid);
+        assert_eq!(back.parent_uid, original.parent_uid);
+        assert_eq!(back.name, original.name);
+        assert_eq!(back.mtime, original.mtime);
+    }
+
+    #[test]
+    fn journal_of_a_new_file_has_no_remote_identity() {
+        let json = r#"{"file_uid":null,"base_revision_uid":null,"parent_uid":"p","name":"n","mtime":5}"#;
+        let journal: Journal = serde_json::from_str(json).unwrap();
+        assert!(journal.file_uid.is_none() && journal.base_revision_uid.is_none());
+        assert_eq!(journal.mtime, 5);
+    }
+
+    #[test]
+    fn load_journal_accepts_a_valid_pair() {
+        let dir = tempfile::tempdir().unwrap();
+        let (json, data) = (dir.path().join("1-2.json"), dir.path().join("1-2.data"));
+        std::fs::write(&json, serde_json::to_vec(&journal("a.txt")).unwrap()).unwrap();
+        std::fs::write(&data, b"x").unwrap();
+        assert_eq!(load_journal(&json, &data).unwrap().name, "a.txt");
+    }
+
+    #[test]
+    fn load_journal_rejects_bad_cases() {
+        let dir = tempfile::tempdir().unwrap();
+        let (json, data) = (dir.path().join("1-2.json"), dir.path().join("1-2.data"));
+        // Missing journal.
+        assert!(load_journal(&json, &data).is_none());
+        // Corrupted journal.
+        std::fs::write(&json, b"{not json").unwrap();
+        std::fs::write(&data, b"x").unwrap();
+        assert!(load_journal(&json, &data).is_none());
+        // Missing content.
+        std::fs::write(&json, serde_json::to_vec(&journal("a.txt")).unwrap()).unwrap();
+        std::fs::remove_file(&data).unwrap();
+        assert!(load_journal(&json, &data).is_none());
+        // Temporary file name.
+        std::fs::write(&data, b"x").unwrap();
+        std::fs::write(&json, serde_json::to_vec(&journal("a.txt~")).unwrap()).unwrap();
+        assert!(load_journal(&json, &data).is_none());
+    }
+
+    #[test]
+    fn staging_names_files_after_session_and_inode() {
+        let staging = Staging::new(PathBuf::from("/staging"));
+        let staged = staging.new_staged(42);
+        assert_eq!(staged.key, format!("{}-42", staging.session));
+        assert_eq!(staged.path, PathBuf::from(format!("/staging/{}-42.data", staging.session)));
+        assert_eq!(staging.journal_path(&staged.key), PathBuf::from(format!("/staging/{}-42.json", staging.session)));
+        assert!(!staged.dirty && staged.writers == 0);
+    }
+
+    #[test]
+    fn staging_discard_removes_content_and_journal() {
+        let dir = tempfile::tempdir().unwrap();
+        let staging = Staging::new(dir.path().to_owned());
+        let staged = staging.new_staged(7);
+        std::fs::write(&staged.path, b"x").unwrap();
+        std::fs::write(staging.journal_path(&staged.key), b"{}").unwrap();
+        staging.discard(&staged);
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn sweep_removes_snapshots_and_temporaries_of_previous_runs_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let touch = |name: &str| std::fs::write(dir.path().join(name), b"x").unwrap();
+        for name in ["100-1.upload.3", "100-1.json.tmp", "100-2.data", "100-2.json", "100-3.data", "200-1.upload.1", "200-1.json.tmp"] {
+            touch(name);
+        }
+        sweep_leftovers(dir.path(), "200");
+        let mut left: Vec<String> = std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+        left.sort();
+        // Content without journal ("100-3.data") is kept aside; the current session is untouched.
+        assert_eq!(left, ["100-2.data", "100-2.json", "100-3.data", "200-1.json.tmp", "200-1.upload.1"]);
+    }
+
+    #[test]
+    fn errno_mapping() {
+        let sdk = |message: &str| SdkError::Sdk { domain: proto::ErrorDomain::Api, message: message.into(), code: None };
+        assert_eq!(errno_of(&sdk("A file or folder with that name already exists")), Errno::EEXIST);
+        assert_eq!(errno_of(&sdk("boom")), Errno::EIO);
+        assert_eq!(errno_of(&SdkError::Protocol("exist".into())), Errno::EIO);
+    }
+
+    #[test]
+    fn only_network_errors_are_transient() {
+        let sdk = |domain| SdkError::Sdk { domain, message: String::new(), code: None };
+        assert!(is_transient(&sdk(proto::ErrorDomain::Network)));
+        assert!(is_transient(&sdk(proto::ErrorDomain::Transport)));
+        assert!(!is_transient(&sdk(proto::ErrorDomain::Api)));
+        assert!(!is_transient(&SdkError::Protocol(String::new())));
+    }
+
+    #[test]
+    fn timestamp_splits_seconds_and_nanos() {
+        let t = timestamp(UNIX_EPOCH + Duration::new(12, 345));
+        assert_eq!((t.seconds, t.nanos), (12, 345));
+        // Before the epoch: clamped.
+        let t = timestamp(UNIX_EPOCH - Duration::from_secs(5));
+        assert_eq!((t.seconds, t.nanos), (0, 0));
+    }
+}

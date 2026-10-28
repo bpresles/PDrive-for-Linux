@@ -29,8 +29,12 @@ pub struct Mountpoint {
 /// folder with files (or anything else than an empty folder or a link) is never touched: it stays
 /// the real mount point, and GIO will show it as a second volume.
 pub fn resolve(requested: &Path) -> Result<Mountpoint> {
-    let public = std::path::absolute(requested).with_context(|| format!("invalid mount point {}", requested.display()))?;
     let target = config::xdg_dir("XDG_DATA_HOME", ".local/share")?.join(APP_DIR).join(TARGET_DIR);
+    resolve_with_target(requested, target)
+}
+
+fn resolve_with_target(requested: &Path, target: PathBuf) -> Result<Mountpoint> {
+    let public = std::path::absolute(requested).with_context(|| format!("invalid mount point {}", requested.display()))?;
     prepare_dir(&target)?;
     match link(&public, &target) {
         Ok(()) => Ok(Mountpoint { public, target }),
@@ -93,5 +97,84 @@ pub fn lazy_unmount(path: &Path) {
         Ok(status) if status.success() => {}
         Ok(status) => eprintln!("fusermount3 -uz {} failed: {status}", path.display()),
         Err(e) => eprintln!("cannot run fusermount3: {e}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn absent_mount_point_becomes_a_link_and_parents_are_created() {
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("data/.mount");
+        let public = root.path().join("home/sub/ProtonDrive");
+        let mount = resolve_with_target(&public, target.clone()).unwrap();
+        assert_eq!(mount.public, public);
+        assert_eq!(mount.target, target);
+        assert!(target.is_dir());
+        assert_eq!(std::fs::read_link(&public).unwrap(), target);
+    }
+
+    #[test]
+    fn empty_folder_is_replaced_by_a_link() {
+        let root = tempfile::tempdir().unwrap();
+        let (target, public) = (root.path().join(".mount"), root.path().join("ProtonDrive"));
+        std::fs::create_dir(&public).unwrap();
+        let mount = resolve_with_target(&public, target.clone()).unwrap();
+        assert_eq!(mount.target, target);
+        assert!(std::fs::symlink_metadata(&public).unwrap().file_type().is_symlink());
+        assert_eq!(std::fs::read_link(&public).unwrap(), target);
+    }
+
+    #[test]
+    fn folder_with_files_stays_the_mount_point() {
+        let root = tempfile::tempdir().unwrap();
+        let (target, public) = (root.path().join(".mount"), root.path().join("ProtonDrive"));
+        std::fs::create_dir(&public).unwrap();
+        std::fs::write(public.join("mine.txt"), b"keep").unwrap();
+        let mount = resolve_with_target(&public, target).unwrap();
+        assert_eq!(mount.public, public);
+        assert_eq!(mount.target, public.canonicalize().unwrap());
+        assert!(std::fs::symlink_metadata(&public).unwrap().is_dir());
+        assert_eq!(std::fs::read(public.join("mine.txt")).unwrap(), b"keep");
+    }
+
+    #[test]
+    fn correct_link_is_left_as_is() {
+        let root = tempfile::tempdir().unwrap();
+        let (target, public) = (root.path().join(".mount"), root.path().join("ProtonDrive"));
+        resolve_with_target(&public, target.clone()).unwrap();
+        let mount = resolve_with_target(&public, target.clone()).unwrap();
+        assert_eq!(mount.target, target);
+        assert_eq!(std::fs::read_link(&public).unwrap(), target);
+    }
+
+    #[test]
+    fn link_to_something_else_is_refused_by_link() {
+        let root = tempfile::tempdir().unwrap();
+        let (target, other, public) = (root.path().join(".mount"), root.path().join("other"), root.path().join("ProtonDrive"));
+        std::fs::create_dir(&other).unwrap();
+        std::os::unix::fs::symlink(&other, &public).unwrap();
+        assert!(link(&public, &target).is_err());
+        assert_eq!(std::fs::read_link(&public).unwrap(), other);
+    }
+
+    #[test]
+    fn regular_file_is_refused_by_link() {
+        let root = tempfile::tempdir().unwrap();
+        let public = root.path().join("ProtonDrive");
+        std::fs::write(&public, b"x").unwrap();
+        assert!(link(&public, &root.path().join(".mount")).is_err());
+        assert_eq!(std::fs::read(&public).unwrap(), b"x");
+    }
+
+    #[test]
+    fn prepare_dir_creates_nested_folders() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("a/b/c");
+        prepare_dir(&path).unwrap();
+        assert!(path.is_dir());
+        prepare_dir(&path).unwrap();
     }
 }

@@ -77,3 +77,54 @@ impl Pins {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pins_are_saved_and_reloaded() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pinned.json");
+        let pins = Pins::load(path.clone());
+        pins.pin("n1", "r1");
+        pins.pin("n2", "r2");
+        pins.pin_folder("d1");
+        let reloaded = Pins::load(path);
+        assert!(reloaded.is_pinned("n1") && reloaded.is_pinned("n2") && !reloaded.is_pinned("d1"));
+        assert!(reloaded.is_folder_pinned("d1") && !reloaded.is_folder_pinned("n1"));
+        assert_eq!(reloaded.pinned_revisions(), HashSet::from(["r1".to_owned(), "r2".to_owned()]));
+    }
+
+    #[test]
+    fn a_new_revision_moves_the_pin() {
+        let dir = tempfile::tempdir().unwrap();
+        let pins = Pins::load(dir.path().join("pinned.json"));
+        pins.pin("n", "r1");
+        pins.pin("n", "r2");
+        assert_eq!(pins.pinned_revisions(), HashSet::from(["r2".to_owned()]));
+    }
+
+    #[test]
+    fn unpinning_persists() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pinned.json");
+        let pins = Pins::load(path.clone());
+        pins.pin("n", "r");
+        pins.pin_folder("d");
+        pins.unpin("n");
+        pins.unpin_folder("d");
+        pins.unpin("unknown");
+        let reloaded = Pins::load(path);
+        assert!(!reloaded.is_pinned("n") && !reloaded.is_folder_pinned("d"));
+    }
+
+    #[test]
+    fn missing_or_corrupted_file_gives_no_pins() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pinned.json");
+        assert!(Pins::load(path.clone()).pinned_revisions().is_empty());
+        std::fs::write(&path, b"{broken").unwrap();
+        assert!(Pins::load(path).pinned_revisions().is_empty());
+    }
+}
