@@ -39,40 +39,42 @@ Dépôt : https://github.com/bpresles/PDrive-for-Linux (privé jusqu'à la fin d
 
 ### README
 
-- [ ] Présentation, avec la mention bien visible « client tiers non officiel, non affilié à Proton AG ».
-- [ ] Fonctionnalités et captures d'écran : emblèmes, menu contextuel, barre latérale, fenêtre de statut quand elle existera.
-- [ ] Installation :
+- [x] Présentation, avec la mention bien visible « client tiers non officiel, non affilié à Proton AG ».
+- [x] Fonctionnalités rédigées (README.md). Reste à faire : fournir les captures d'écran dans `docs/screenshots/` (marqueurs TODO dans le README : emblèmes, menu contextuel, barre latérale, fenêtre de statut, icône de notification).
+- [x] Installation :
   - prérequis : Fedora/Debian, FUSE 3, .NET 10 SDK pour compiler le SDK, `nautilus-devel` pour l'extension ;
   - `install.sh`, `install-system.sh` ;
   - lancement de l'application, connexion, démarrage automatique ;
   - sous GNOME, activation de l'extension AppIndicator pour l'icône de notification.
-- [ ] Architecture, avec un schéma : SDK NativeAOT, `pdrived`, FUSE, D-Bus, extension, CloudProviders.
-- [ ] Limites connues : permissions et date seule non conservées, fichiers « Partagés avec moi » et photos non gérés, `O_NOATIME` refusé sur les fichiers non mis en cache.
-- [ ] Configuration (`~/.config/pdrive/config.toml`), journaux, désinstallation.
+- [x] Architecture, avec un schéma : SDK NativeAOT, `pdrived`, FUSE, D-Bus, extension, CloudProviders.
+- [x] Limites connues : permissions et date seule non conservées, fichiers « Partagés avec moi » et photos non gérés, `O_NOATIME` refusé sur les fichiers non mis en cache.
+- [x] Configuration (`~/.config/pdrive/config.toml`), journaux, désinstallation.
 
 ### Licences
 
-- [ ] Fichier `LICENSE` : GPL-3.0-or-later, texte complet.
-- [ ] Mentions des composants tiers sous MIT : SDK Proton Drive (`ProtonDriveApps/sdk`), `dotnet-crypto`, `proton-crypto-rs`. Prévoir un fichier `THIRD_PARTY_NOTICES` livré avec les paquets.
-- [ ] En-têtes SPDX dans les sources.
+- [x] Fichier `LICENSE` : GPL-3.0-or-later, texte complet.
+- [x] Mentions des composants tiers sous MIT : SDK Proton Drive (`ProtonDriveApps/sdk`), `dotnet-crypto`, `proton-crypto-rs`. Fichier `THIRD_PARTY_NOTICES` écrit ; reste à auditer les paquets NuGet du SDK et les crates Rust de `dotnet-crypto` (mentions « TO COMPLETE » du fichier), et à le livrer avec les paquets.
+- [x] En-têtes SPDX dans les sources `.rs`, `.c`, scripts shell et `Makefile` (les scripts de paquets de l'autre agent et les fichiers de `debian/`, `packaging/rpm/`, `.github/` n'en ont pas encore).
 
 ### Tests automatisés
 
-- [ ] Tests unitaires de l'arborescence (`tree.rs`) : listages, déplacements, éléments locaux, invalidations.
-- [ ] Journaux d'envoi et reprise (`writes.rs`) : (dé)sérialisation, nom de conflit, fichiers temporaires ignorés.
-- [ ] Cache de contenu : purge LRU avec épingles, conservation du début des fichiers, adoption après envoi.
-- [ ] Miniatures : nom MD5 de l'URI, métadonnées `Thumb::URI` et `Thumb::MTime`.
-- [ ] Liaisons SDK : test du pont avec un hôte factice (l'équivalent de `pdrive selftest`), sans réseau.
-- [ ] Tests d'intégration FUSE optionnels, sur un compte de test, hors CI par défaut.
-- [ ] CI GitHub Actions : `cargo fmt --check`, `clippy -D warnings`, `cargo test`, compilation de l'extension.
+- [x] Tests unitaires de l'arborescence (`tree.rs`) : listages, déplacements, éléments locaux, invalidations.
+- [x] Journaux d'envoi et reprise (`writes.rs`) : (dé)sérialisation, nom de conflit, fichiers temporaires ignorés. La reprise est testée par ses parties pures (`load_journal`, `sweep_leftovers`) ; `recover_uploads` complet exigerait un faux client Drive.
+- [x] Cache de contenu : purge LRU avec épingles, conservation du début des fichiers, adoption après envoi.
+- [x] Miniatures : nom MD5 de l'URI, métadonnées `Thumb::URI` et `Thumb::MTime`.
+- [x] Liaisons SDK : test du pont avec un hôte factice (l'équivalent de `pdrive selftest`), sans réseau : `crates/pdsdk/tests/bridge.rs`, ignoré par défaut (`cargo test -p pdsdk --test bridge -- --ignored`, bibliothèques de `native/linux-x64/`).
+- [x] Aussi couverts : `activity`, `mountpoint`, `pins`, `config` du daemon, `pdi18n`, `config.toml` de `pdrive-app`, erreurs du SDK.
+- [x] Tests d'intégration FUSE optionnels, sur un compte de test, hors CI par défaut : squelette `crates/pdrived/tests/fuse_integration.rs` (`#[ignore]`, `PDRIVE_FUSE_TEST=1`, session D-Bus dédiée). Reste à l'étoffer (reprise après arrêt, conflits) et à le valider sur un compte de test.
+- [ ] CI GitHub Actions : `cargo fmt --check`, `clippy -D warnings`, `cargo test`, compilation de l'extension. À faire : un job Rust qui installe `libglib2.0-dev libgtk-4-dev libadwaita-1-dev libfuse3-dev libdbus-1-dev libssl-dev libgettextpo-dev pkg-config` (selon les erreurs de compilation), récupère les bibliothèques natives dans `native/linux-x64/` (archive d'une release) puis lance `cargo clippy --workspace --all-targets -- -D warnings` et `cargo test --workspace` (et `-p pdsdk --test bridge -- --ignored` si `libproton_crypto.so` est présent). `cargo fmt --check` n'est pas encore appliqué au dépôt.
 
 ### Identifiant D-Bus définitif
 
-- [ ] Remplacer `io.github.pdrive.PDrive` par `io.github.bpresles.PDrive` (dépôt `bpresles/PDrive-for-Linux`). Fichiers concernés :
+- [x] Remplacer `io.github.pdrive.PDrive` par `io.github.bpresles.PDrive` (dépôt `bpresles/PDrive-for-Linux`). Fichiers concernés :
   - `crates/pdrived/src/dbus.rs` : nom de bus, chemins d'objets, interface `…PDrive1` ;
   - `extension/pdrive-nautilus.c` ;
   - `packaging/io.github.pdrive.PDrive.ini`, à renommer.
-- [ ] Prévoir la migration : supprimer l'ancien `.ini` de `/usr/local/share/cloud-providers/` à l'installation.
+- [x] Prévoir la migration : supprimer l'ancien `.ini` de `/usr/local/share/cloud-providers/` à l'installation.
+  - Fait aussi : `.desktop`, icône d'application, `pdrive-app` (renomme l'ancien fichier autostart au démarrage), `install.sh` (supprime l'ancien `.desktop` et l'ancienne icône), `po/` régénéré. Reste : reporter le nouvel identifiant dans `debian/`, `packaging/rpm/`, `.github/` et `packaging/README.md`, puis tester après installation (relancer l'app, `install-system.sh`, `nautilus -q`).
 
 ### Paquets RPM et DEB, workflow de release
 
