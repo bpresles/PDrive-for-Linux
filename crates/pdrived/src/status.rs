@@ -80,6 +80,18 @@ impl Drive {
         self.ino_of_path(path).map_or(FileStatus::Unknown, |ino| self.status_of(ino))
     }
 
+    /// Overall state exposed on D-Bus: `syncing`, `idle`, `unmounted` or `error`.
+    pub fn state(&self) -> &'static str {
+        if !self.mounted.load(std::sync::atomic::Ordering::SeqCst) {
+            "unmounted"
+        } else if self.failed.load(std::sync::atomic::Ordering::SeqCst) {
+            "error"
+        } else {
+            let activity = self.activity();
+            if activity.uploads + activity.downloads > 0 { "syncing" } else { "idle" }
+        }
+    }
+
     pub fn activity(&self) -> ActivitySummary {
         ActivitySummary { uploads: self.staging_count(), downloads: self.content.active_transfers() }
     }

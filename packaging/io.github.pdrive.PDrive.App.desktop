@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=PDrive
+GenericName=Proton Drive client
+Comment=Unofficial third-party client for Proton Drive, not affiliated with Proton AG
+Exec=pdrive-app
+Icon=io.github.pdrive.PDrive.App
+Terminal=false
+Categories=Network;FileTransfer;
+Keywords=Proton;Drive;Cloud;Sync;
+StartupNotify=false

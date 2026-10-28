@@ -41,6 +41,11 @@ pub async fn logout() -> Result<()> {
 
 /// Loads the stored session, unlocks the account keys and creates an SDK client.
 pub async fn connect(verbose: bool) -> Result<DriveClient> {
+    Ok(connect_with_api(verbose).await?.0)
+}
+
+/// Like [`connect`], also returning the API client (for account calls such as [`account_info`]).
+pub async fn connect_with_api(verbose: bool) -> Result<(DriveClient, Arc<ApiClient>)> {
     let session = session::load().await?.context("not signed in: run `pdrive login` first")?;
     let key_password = session.key_password.clone();
     let api = Arc::new(ApiClient::new(Some(session))?);
@@ -53,6 +58,40 @@ pub async fn connect(verbose: bool) -> Result<DriveClient> {
     }
 
     pdsdk::set_crypto_library_dir(Path::new(pdsdk::DEFAULT_LIB_DIR));
-    let host = Arc::new(AppHost { api, keys, verbose });
-    Ok(DriveClient::create(host, &format!("{}/", config::API_BASE_URL), ClientOptions::default()).await?)
+    let host = Arc::new(AppHost { api: api.clone(), keys, verbose });
+    let client = DriveClient::create(host, &format!("{}/", config::API_BASE_URL), ClientOptions::default()).await?;
+    Ok((client, api))
+}
+
+/// Whether a session is stored in the keyring.
+pub async fn is_signed_in() -> Result<bool> {
+    Ok(session::load().await?.is_some())
+}
+
+/// Address and storage quota of the account.
+pub struct AccountInfo {
+    pub email: String,
+    pub used_space: u64,
+    pub max_space: u64,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct UserResponse {
+    user: User,
+}
+
+/// Fields of `GET core/v4/users` (see `UserDto` in the SDK's account project).
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct User {
+    email: String,
+    used_space: u64,
+    max_space: u64,
+}
+
+/// One call to the user endpoint: the callers must not repeat it in a tight loop.
+pub async fn account_info(api: &ApiClient) -> Result<AccountInfo> {
+    let response: UserResponse = api.get_json("core/v4/users").await?;
+    Ok(AccountInfo { email: response.user.email, used_space: response.user.used_space, max_space: response.user.max_space })
 }

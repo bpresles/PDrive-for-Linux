@@ -1,0 +1,9 @@
+[package]
+name = "pdi18n"
+description = "Translations of the PDrive for Linux programs (gettext, domain pdrive)"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+gettext-rs = { version = "0.7", features = ["gettext-system"] }

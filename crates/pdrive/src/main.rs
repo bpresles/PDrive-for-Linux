@@ -3,6 +3,7 @@
 //!     pdrive login          sign in through the browser, store the session in the keyring
 //!     pdrive ls [PATH]      list a folder of "My files" (e.g. `pdrive ls Documents/Invoices`)
 //!     pdrive logout         revoke the session and remove it from the keyring
+//!     pdrive status         exit status 0 if a session is stored in the keyring, 1 otherwise
 //!
 //! Set PDRIVE_VERBOSE=1 to log HTTP requests and SDK debug messages.
 
@@ -21,9 +22,14 @@ async fn main() -> Result<()> {
         Some("login") => login().await,
         Some("ls") => list(args.get(1).map(String::as_str).unwrap_or("")).await,
         Some("logout") => logout().await,
+        Some("status") => {
+            let signed_in = pdcore::is_signed_in().await?;
+            println!("{}", if signed_in { "signed in" } else { "not signed in" });
+            std::process::exit(if signed_in { 0 } else { 1 });
+        }
         Some("selftest") => selftest().await,
         _ => {
-            eprintln!("usage: pdrive login | ls [PATH] | logout | selftest");
+            eprintln!("usage: pdrive login | ls [PATH] | logout | status | selftest");
             std::process::exit(2);
         }
     }

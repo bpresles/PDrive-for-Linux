@@ -7,10 +7,12 @@
 //! downloaded and decrypted on first open into `$XDG_CACHE_HOME/pdrive/content` and
 //! readable while downloading, and remote changes are applied from Drive events. Writes are
 //! staged locally and uploaded once the file is closed (see `writes.rs`); uploads interrupted by
-//! a stop are resumed at the next start. Stop with Ctrl+C or SIGTERM; when the mount is ejected
+//! a stop are resumed at the next start. Normally started and supervised by `pdrive-app`; it can
+//! also be run alone (debugging). Stop with Ctrl+C or SIGTERM; when the mount is ejected
 //! (`fusermount3 -u MOUNTPOINT`, or from the file manager), the daemon waits for a mount request.
 //! Set PDRIVE_VERBOSE=1 for logs.
 
+mod activity;
 mod config;
 mod content;
 mod dbus;
@@ -32,6 +34,7 @@ use anyhow::{Context, Result};
 use fuser::{Config, MountOption};
 use tokio::signal::unix::{signal, SignalKind};
 
+use activity::ActivityLog;
 use config::{Settings, APP_DIR};
 use content::ContentCache;
 use drive::Drive;
@@ -60,19 +63,21 @@ async fn main() -> Result<()> {
     }
     let mountpoint = prepare_mountpoint(&mountpoint)?;
 
-    let client = pdcore::connect(verbose).await?;
+    let (client, api) = pdcore::connect_with_api(verbose).await?;
     let root = client.my_files_folder().await?;
     let scope = root.tree_event_scope_id.clone();
-    let content = ContentCache::new(content_dir, tokio::runtime::Handle::current(), verbose);
+    let activity = Arc::new(ActivityLog::default());
+    let content = ContentCache::new(content_dir, tokio::runtime::Handle::current(), activity.clone(), verbose);
     let staging = Staging::new(staging_dir);
     let data_dir = config::xdg_dir("XDG_DATA_HOME", ".local/share")?.join(APP_DIR);
     std::fs::create_dir_all(&data_dir).with_context(|| format!("cannot create {}", data_dir.display()))?;
     let pins = Pins::load(data_dir.join("pinned.json"));
-    let drive = Arc::new(Drive::new(client, root.uid, content, staging, pins, ThumbnailCache::new(&cache_home), mountpoint.clone(), verbose));
+    let drive = Arc::new(Drive::new(client, api, activity, root.uid, content, staging, pins, ThumbnailCache::new(&cache_home), mountpoint.clone(), verbose));
 
     dbus::start(drive.clone(), tokio::runtime::Handle::current());
     let background = [
         tokio::spawn(watch::run(drive.clone(), scope)),
+        tokio::spawn(drive.clone().watch_account()),
         tokio::spawn({
             let drive = drive.clone();
             async move { drive.recover_uploads().await }

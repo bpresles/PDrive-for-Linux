@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use pdsdk::proto::{drive_event::Event, DriveEvent};
 
+use crate::activity::Kind;
 use crate::drive::{Change, Drive};
 use crate::replay::{self, Replay};
 use crate::tree::{EntryKind, NodeInfo, NodeKind};
@@ -64,6 +65,20 @@ async fn apply(drive: &Arc<Drive>, event: &DriveEvent) {
         Some(Event::CursorAdvanced(_) | Event::SharedWithMeUpdated(_)) | None => None,
     };
     let Some((change, replay)) = planned else { return };
+    let size = match &change {
+        Change::Update { node: NodeInfo { kind: NodeKind::File { size, .. }, .. }, .. } => *size,
+        _ => 0,
+    };
+    match &replay {
+        Some(Replay::CreateFile(path) | Replay::CreateFolder(path)) => record(drive, Kind::RemoteCreated, path, size),
+        Some(Replay::Rename(_, path)) => record(drive, Kind::RemoteRenamed, path, size),
+        Some(Replay::Touch(path, _)) => record(drive, Kind::RemoteUpdated, path, size),
+        Some(Replay::RemoveFile(path) | Replay::RemoveFolder(path)) => record(drive, Kind::RemoteRemoved, path, 0),
+        None => {}
+    }
+    if replay.is_some() {
+        drive.quota_changed();
+    }
     // A new or updated file needs its thumbnail in the desktop cache (the old one no longer
     // matches the modification time).
     let updated_file = match &change {
@@ -101,6 +116,10 @@ async fn apply(drive: &Arc<Drive>, event: &DriveEvent) {
     if drive.verbose {
         eprintln!("[event] {} applied{}", event.id, if replayed { "" } else { " (without live notification)" });
     }
+}
+
+fn record(drive: &Drive, kind: Kind, path: &std::path::Path, size: u64) {
+    drive.activity_log.record(kind, path.to_string_lossy(), size);
 }
 
 fn plan_removal(drive: &Drive, node_uid: &str) -> Option<(Change, Option<Replay>)> {

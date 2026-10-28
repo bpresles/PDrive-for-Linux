@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Installs PDrive for Linux for the current user:
 #   ~/.local/lib/pdrive/                    native libraries (Proton Drive SDK and crypto)
-#   ~/.local/bin/pdrived, pdrive            mount daemon and command-line tool (login, logout)
-#   ~/.config/systemd/user/pdrive.service
-#   ~/.local/share/icons/hicolor/scalable/emblems/   sync state emblems for Nautilus
+#   ~/.local/bin/pdrive-app, pdrived, pdrive  desktop application (tray icon, status window; it
+#                                           runs pdrived), mount daemon, command-line tool
+#   ~/.local/share/applications/io.github.pdrive.PDrive.App.desktop
+#   ~/.local/share/icons/hicolor/scalable/   application and tray icons, sync state emblems
+#                                           for Nautilus
+# It also removes the systemd user service of earlier versions (pdrive.service).
 # The Nautilus extension and the sidebar declaration are installed by install-system.sh (sudo).
 set -euo pipefail
 
@@ -11,18 +14,19 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LIB_DIR="$HOME/.local/lib/pdrive"
 BIN_DIR="$HOME/.local/bin"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 UNIT="pdrive.service"
 
 if [[ ! -f "$ROOT/native/linux-x64/libproton_drive_sdk.so" ]]; then
     "$ROOT/scripts/build-native.sh"
 fi
 
-mkdir -p "$LIB_DIR" "$BIN_DIR" "$UNIT_DIR"
+mkdir -p "$LIB_DIR" "$BIN_DIR" "$UNIT_DIR" "$APP_DIR"
 install -m 0644 "$ROOT/native/linux-x64/"lib{proton_drive_sdk,proton_crypto}.so "$LIB_DIR/"
 
 # The binaries find the libraries through an rpath to the installed directory.
-PDSDK_LIB_DIR="$LIB_DIR" cargo build --release --manifest-path "$ROOT/Cargo.toml" -p pdrived -p pdrive
-install -m 0755 "$ROOT/target/release/pdrived" "$ROOT/target/release/pdrive" "$BIN_DIR/"
+PDSDK_LIB_DIR="$LIB_DIR" cargo build --release --manifest-path "$ROOT/Cargo.toml" -p pdrived -p pdrive -p pdrive-app
+install -m 0755 "$ROOT/target/release/pdrived" "$ROOT/target/release/pdrive" "$ROOT/target/release/pdrive-app" "$BIN_DIR/"
 
 # Remove the installation made before the project got its name.
 LEGACY_UNIT="nautilus-drive-poc.service"
@@ -33,25 +37,43 @@ if [[ -f "$UNIT_DIR/$LEGACY_UNIT" ]]; then
     LEGACY_REMOVED=1
 fi
 
-ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/emblems"
-mkdir -p "$ICON_DIR"
-install -m 0644 "$ROOT/packaging/icons/"*.svg "$ICON_DIR/"
+# Migrate from the systemd service: the application now runs the daemon.
+if [[ -f "$UNIT_DIR/$UNIT" ]]; then
+    systemctl --user disable --now "$UNIT" || true
+    rm -f "$UNIT_DIR/$UNIT"
+    systemctl --user daemon-reload
+    SERVICE_REMOVED=1
+fi
 
-install -m 0644 "$ROOT/packaging/$UNIT" "$UNIT_DIR/$UNIT"
-systemctl --user daemon-reload
+ICON_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
+(cd "$ROOT/packaging/icons/hicolor" && find . -name '*.svg' -print0 | while IFS= read -r -d '' icon; do
+    install -Dm 0644 "$icon" "$ICON_ROOT/$icon"
+done)
+gtk-update-icon-cache -q -t "$ICON_ROOT" 2>/dev/null || true
 
-if [[ -n "${LEGACY_REMOVED:-}" ]]; then
-    echo "The previous installation (nautilus-drive-poc) was removed; enabling $UNIT instead."
-    systemctl --user enable --now "$UNIT"
+# The Exec line gets the absolute path: ~/.local/bin is not always in the PATH of the menus.
+sed "s|^Exec=pdrive-app|Exec=$BIN_DIR/pdrive-app|" "$ROOT/packaging/io.github.pdrive.PDrive.App.desktop" > "$APP_DIR/io.github.pdrive.PDrive.App.desktop"
+update-desktop-database -q "$APP_DIR" 2>/dev/null || true
+
+if [[ -n "${LEGACY_REMOVED:-}" || -n "${SERVICE_REMOVED:-}" ]]; then
+    echo "The previous systemd service was removed: PDrive is now started by pdrive-app."
+    echo "If pdrived is still running, stop it (pkill pdrived) before starting pdrive-app."
 fi
 
 cat <<EOF
 
 Installed. Next steps:
-  pdrive login                                  # once: sign in through the browser
-  systemctl --user enable --now $UNIT           # mount now and at each login
-  journalctl --user -u $UNIT -f                 # follow the logs
+  pdrive-app                                    # or "PDrive" in the applications menu: runs the
+                                                # daemon, shows the tray icon and the status window
+  Sign in from the window ("Sign in"), or with: pdrive login
+  Mount point, cache, start at login and sign out: settings of the window
   scripts/install-system.sh                     # Nautilus emblems, menu and sidebar (sudo)
+
+Logs: from a terminal, pdrive-app (and the daemon it runs) logs on its standard error output.
+Started from the menu or at login, they go to the journal of your session:
+  journalctl --user -t pdrive -f
+or, if there is no journal, to ${XDG_STATE_HOME:-$HOME/.local/state}/pdrive/pdrive.log.
+On GNOME, the tray icon needs the "AppIndicator and KStatusNotifierItem Support" extension.
 
 The mount point and the cache size are set in
 ${XDG_CONFIG_HOME:-$HOME/.config}/pdrive/config.toml (default: ~/ProtonDrive, 10 GiB).

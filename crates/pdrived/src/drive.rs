@@ -6,9 +6,11 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime};
 
 use fuser::{Errno, INodeNo, Notifier};
+use pdcore::api::ApiClient;
 use pdsdk::DriveClient;
 use pdsdk::proto::{file_thumbnail, ThumbnailType};
 
+use crate::activity::{ActivityLog, Kind};
 use crate::content::{ContentCache, Opened};
 use crate::replay::{self, Replay};
 use crate::thumbnails::ThumbnailCache;
@@ -29,8 +31,25 @@ pub enum Change {
     Refresh,
 }
 
+/// Address and storage of the account, as last fetched.
+#[derive(Clone, Default, PartialEq)]
+pub struct Account {
+    pub email: String,
+    pub used_space: u64,
+    pub max_space: u64,
+}
+
+/// Minimum delay between two calls to the user endpoint.
+const QUOTA_REFRESH_DELAY: Duration = Duration::from_secs(60);
+
 pub struct Drive {
     pub client: Arc<DriveClient>,
+    pub api: Arc<ApiClient>,
+    pub activity_log: Arc<ActivityLog>,
+    pub account: Mutex<Account>,
+    /// An upload was given up and not succeeded since: shown as the "error" state.
+    pub failed: AtomicBool,
+    quota_changed: tokio::sync::Notify,
     pub tree: Mutex<Tree>,
     pub content: Arc<ContentCache>,
     pub staging: Staging,
@@ -57,6 +76,8 @@ impl Drive {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         client: DriveClient,
+        api: Arc<ApiClient>,
+        activity_log: Arc<ActivityLog>,
         root_uid: String,
         content: ContentCache,
         staging: Staging,
@@ -67,6 +88,11 @@ impl Drive {
     ) -> Self {
         Self {
             client: Arc::new(client),
+            api,
+            activity_log,
+            account: Mutex::new(Account::default()),
+            failed: AtomicBool::new(false),
+            quota_changed: tokio::sync::Notify::new(),
             tree: Mutex::new(Tree::new(root_uid)),
             content: Arc::new(content),
             staging,
@@ -82,6 +108,34 @@ impl Drive {
             replay_lock: tokio::sync::Mutex::new(()),
             deferred: Mutex::new(Vec::new()),
         }
+    }
+
+    /// Fetches the account address and quota at once, then again after uploads and deletions
+    /// (see [`Drive::quota_changed`]), at most once per [`QUOTA_REFRESH_DELAY`].
+    pub async fn watch_account(self: Arc<Self>) {
+        loop {
+            match pdcore::account_info(&self.api).await {
+                Ok(info) => {
+                    let account = Account { email: info.email, used_space: info.used_space, max_space: info.max_space };
+                    *self.account.lock().unwrap_or_else(|e| e.into_inner()) = account;
+                }
+                Err(e) => eprintln!("cannot fetch the account storage: {e:#}"),
+            }
+            self.quota_changed.notified().await;
+            tokio::time::sleep(QUOTA_REFRESH_DELAY).await;
+        }
+    }
+
+    /// Storage was probably used or freed: refresh the quota soon.
+    pub fn quota_changed(&self) {
+        self.quota_changed.notify_one();
+    }
+
+    /// Records a rename or a move of a node, under its new path.
+    pub fn record_move(&self, parent: u64, new_parent: u64, new_name: &str) {
+        let kind = if parent == new_parent { Kind::Rename } else { Kind::Move };
+        let folder = self.tree().path_of(new_parent).unwrap_or_default();
+        self.activity_log.record(kind, folder.join(new_name).to_string_lossy(), 0);
     }
 
     pub fn set_pending(&self, change: Change) {
@@ -222,7 +276,8 @@ impl Drive {
                 drive.notify_status(ino);
             }
         };
-        self.content.open(self.client.clone(), &revision_uid, size, need_all, on_complete).await.map_err(|e| {
+        let label = self.tree().path_of(ino).unwrap_or_default().to_string_lossy().into_owned();
+        self.content.open(self.client.clone(), &revision_uid, &label, size, need_all, on_complete).await.map_err(|e| {
             eprintln!("cannot open revision {revision_uid}: {e}");
             Errno::EIO
         })

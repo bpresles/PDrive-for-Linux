@@ -1,0 +1,17 @@
+[package]
+name = "pdrive-app"
+description = "PDrive for Linux desktop application: runs the daemon, tray icon and status window"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+adw = { package = "libadwaita", version = "0.9", features = ["v1_6"] }
+gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
+pdi18n = { path = "../pdi18n" }
+async-channel = "2"
+ksni = "0.3"
+tokio = { version = "1", features = ["rt", "time"] }
+toml_edit = "0.25"
+libc = "0.2"

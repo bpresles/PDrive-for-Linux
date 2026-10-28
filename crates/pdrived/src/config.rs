@@ -5,6 +5,8 @@
 //! mountpoint = "~/ProtonDrive"
 //! # Maximum size of the cache of downloaded files, in GiB.
 //! cache_size_gib = 10
+//! # Whether launching pdrive-app opens its status window (read by pdrive-app only).
+//! show_window_at_startup = true
 //! ```
 
 use std::path::{Path, PathBuf};
@@ -32,11 +34,14 @@ pub fn migrate_legacy_dirs() -> Result<()> {
 pub struct Settings {
     pub mountpoint: String,
     pub cache_size_gib: f64,
+    /// Setting of pdrive-app, accepted here as the file is shared.
+    #[allow(dead_code)]
+    pub show_window_at_startup: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { mountpoint: "~/ProtonDrive".into(), cache_size_gib: 10.0 }
+        Self { mountpoint: "~/ProtonDrive".into(), cache_size_gib: 10.0, show_window_at_startup: true }
     }
 }
 

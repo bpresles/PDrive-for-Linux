@@ -18,6 +18,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use pdsdk::{CancellationToken, DriveClient};
+
+use crate::activity::{ActivityLog, Kind, State};
 use tokio::sync::watch;
 
 const IDLE_CANCEL_DELAY: Duration = Duration::from_secs(20);
@@ -81,12 +83,13 @@ pub struct ContentCache {
     dir: PathBuf,
     transfers: Mutex<HashMap<String, Arc<Transfer>>>,
     runtime: tokio::runtime::Handle,
+    activity: Arc<ActivityLog>,
     verbose: bool,
 }
 
 impl ContentCache {
-    pub fn new(dir: PathBuf, runtime: tokio::runtime::Handle, verbose: bool) -> Self {
-        Self { dir, transfers: Mutex::new(HashMap::new()), runtime, verbose }
+    pub fn new(dir: PathBuf, runtime: tokio::runtime::Handle, activity: Arc<ActivityLog>, verbose: bool) -> Self {
+        Self { dir, transfers: Mutex::new(HashMap::new()), runtime, activity, verbose }
     }
 
     /// Revision UIDs are longer than the 255-byte file name limit: name cache files by their hash.
@@ -129,11 +132,13 @@ impl ContentCache {
 
     /// Opens the content of a revision. Without `need_all`, a cached head is returned as is;
     /// otherwise the download is started (or joined) if the content is not complete.
-    /// `on_complete` gets the real size once a download started here finishes.
+    /// `on_complete` gets the real size once a download started here finishes; `label` (the path
+    /// in the mount) names it in the activity journal.
     pub async fn open(
         self: &Arc<Self>,
         client: Arc<DriveClient>,
         revision_uid: &str,
+        label: &str,
         size: u64,
         need_all: bool,
         on_complete: impl FnOnce(u64) + Send + 'static,
@@ -152,7 +157,7 @@ impl ContentCache {
                 let length = file.metadata()?.len();
                 return Ok(Opened::Head(file, length));
             }
-        match self.start(client, revision_uid, size, on_complete).await? {
+        match self.start(client, revision_uid, label, size, on_complete).await? {
             Some(transfer) => Ok(Opened::Partial(File::open(path.with_extension("part"))?, transfer)),
             // Started concurrently by someone else.
             None => self.join(revision_uid)?.ok_or_else(|| std::io::Error::other("download vanished")),
@@ -171,6 +176,7 @@ impl ContentCache {
         self: &Arc<Self>,
         client: Arc<DriveClient>,
         revision_uid: &str,
+        label: &str,
         size: u64,
         on_complete: impl FnOnce(u64) + Send + 'static,
     ) -> std::io::Result<Option<Arc<Transfer>>> {
@@ -196,6 +202,7 @@ impl ContentCache {
             writer
         };
 
+        let activity = self.activity.begin(Kind::Download, label, size);
         let (cache, revision_uid, task_transfer) = (self.clone(), revision_uid.to_owned(), transfer.clone());
         self.runtime.spawn(async move {
             if cache.verbose {
@@ -238,6 +245,12 @@ impl ContentCache {
                 eprintln!("[download] {} {revision_uid}", if outcome == Progress::Done { "done" } else { "stopped" });
             }
             cache.transfers().remove(&revision_uid);
+            match outcome {
+                Progress::Done => cache.activity.finish(activity, State::Done),
+                // Nobody read it long enough: not worth showing.
+                _ if task_transfer.cancelled.load(Ordering::SeqCst) => cache.activity.discard(activity),
+                _ => cache.activity.finish(activity, State::Failed),
+            }
             progress.send_replace(outcome);
         });
         Ok(Some(transfer))

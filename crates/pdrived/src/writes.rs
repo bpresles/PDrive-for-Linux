@@ -23,6 +23,7 @@ use pdsdk::proto::{self, NodeMoveItem};
 use pdsdk::SdkError;
 use serde::{Deserialize, Serialize};
 
+use crate::activity::{Kind, State};
 use crate::content::Opened;
 use crate::drive::Drive;
 use crate::tree::{is_local, EntryKind, NodeInfo};
@@ -259,7 +260,10 @@ impl Drive {
     async fn upload(self: &Arc<Self>, ino: u64) {
         for attempt in 1..=UPLOAD_ATTEMPTS {
             match self.try_upload(ino).await {
-                Ok(()) => return,
+                Ok(()) => {
+                    self.failed.store(false, std::sync::atomic::Ordering::SeqCst);
+                    return;
+                }
                 Err(e) => {
                     eprintln!("upload failed (attempt {attempt}/{UPLOAD_ATTEMPTS}): {e}");
                     tokio::time::sleep(UPLOAD_RETRY_DELAY).await;
@@ -267,6 +271,7 @@ impl Drive {
             }
         }
         eprintln!("giving up uploading inode {ino}: its content stays local until it is written again");
+        self.failed.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
     async fn try_upload(self: &Arc<Self>, ino: u64) -> Result<(), String> {
@@ -293,6 +298,10 @@ impl Drive {
         if self.verbose {
             eprintln!("[upload] {} {name} ({size} bytes)", if is_local(&uid) { "new file" } else { "new revision of" });
         }
+        let activity = {
+            let path = self.tree().path_of(ino).unwrap_or_else(|| name.clone().into());
+            self.activity_log.begin(Kind::Upload, path.to_string_lossy(), size)
+        };
         let result = if is_local(&uid) {
             let media_type = media_type(&name, &snapshot);
             self.client.upload_new_file(&parent_uid, &name, &media_type, &snapshot, size, Some(timestamp(mtime))).await
@@ -303,9 +312,12 @@ impl Drive {
             Ok(uploaded) => uploaded,
             Err(e) => {
                 let _ = std::fs::remove_file(&snapshot);
+                self.activity_log.finish(activity, State::Failed);
                 return Err(e.to_string());
             }
         };
+        self.activity_log.finish(activity, State::Done);
+        self.quota_changed();
 
         self.content.adopt(&uploaded.revision_uid, &snapshot);
         // The file may have been renamed, moved or deleted while it was uploaded under the name
@@ -414,10 +426,13 @@ impl Drive {
             (ino, entry.uid.clone())
         };
         if !is_local(&uid) {
+            let path = self.tree().path_of(ino).unwrap_or_else(|| name.into());
             self.client.trash(&uid).await.map_err(|e| {
-                eprintln!("cannot move {name} to the trash: {e}");
+                eprintln!("cannot move {path:?} to the trash: {e}");
                 errno_of(&e)
             })?;
+            self.activity_log.record(Kind::Trash, path.to_string_lossy(), 0);
+            self.quota_changed();
         }
         if let Some(staged) = self.staging.files().remove(&ino) {
             self.staging.discard(&staged);
@@ -462,6 +477,7 @@ impl Drive {
                 eprintln!("cannot move {name} to {new_name}: {e}");
                 errno_of(&e)
             })?;
+            self.record_move(parent, new_parent, new_name);
         }
         self.tree().move_entry(source, new_parent, new_name.to_owned());
         // A local file renamed from a temporary name must now be uploaded.
@@ -523,6 +539,8 @@ impl Drive {
             match self.resume_upload(&journal, &data).await {
                 Ok(name) => {
                     eprintln!("[recovery] uploaded {name}, left over by the previous run");
+                    self.activity_log.record(Kind::Upload, name, 0);
+                    self.quota_changed();
                     let _ = std::fs::remove_file(&journal_path);
                 }
                 // Kept for the next run.
