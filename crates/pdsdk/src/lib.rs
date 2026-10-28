@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Async Rust bindings to the Proton Drive SDK native library (`libproton_drive_sdk.so`).
 //!
 //! The SDK is the official C# implementation compiled with NativeAOT. Its C ABI is message based:

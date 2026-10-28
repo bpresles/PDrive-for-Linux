@@ -1,0 +1,58 @@
+PDrive for Linux - third-party notices
+======================================
+
+PDrive for Linux is free software, GPL-3.0-or-later (see LICENSE). It is an unofficial
+third-party client for Proton Drive and is not affiliated with, or endorsed by, Proton AG.
+
+This file lists the third-party components that the binary packages ship or are built
+from. It is a factual inventory: the licence texts are the ones delivered by each project,
+not reproduced or rewritten here. Items marked TO COMPLETE have not been audited yet.
+
+1. Proton Drive SDK (libproton_drive_sdk.so)
+   - Source: https://github.com/ProtonDriveApps/sdk, revision pinned in scripts/build-native.sh
+   - Licence: MIT, Copyright (c) 2025-2026 Proton AG
+   - Licence text: LICENSE.md of that repository; shipped in the native archive as
+     LICENSE-proton-sdk.md and, once built, in third_party/sdk/LICENSE.md.
+   - Compiled with .NET NativeAOT: the library embeds the .NET runtime and the NuGet packages
+     listed in third_party/sdk/config/cs/Packages.props (Microsoft.Extensions.*, Polly,
+     SQLitePCLRaw, System.Linq.Async, ...). TO COMPLETE: list the packages actually linked in
+     and their licences (the NuGet packages carry their own licence files).
+
+2. Proton cryptography (libproton_crypto.so)
+   - Source: https://github.com/ProtonDriveApps/dotnet-crypto, revision pinned in
+     scripts/build-native.sh (Rust FFI crate proton-crypto-ffi)
+   - Licence: MIT, Copyright (c) 2025 Proton AG
+   - Licence text: LICENSE.txt of that repository; shipped in the native archive as
+     LICENSE-proton-dotnet-crypto.txt and in third_party/dotnet-crypto/LICENSE.txt.
+   - It depends on Rust crates, among them proton-rpgp and proton-srp (cargo registry
+     "proton"). TO COMPLETE: list the crates statically linked and their licences
+     (cargo metadata in third_party/dotnet-crypto/src/rust/proton-crypto-ffi).
+
+3. proton-crypto-rs (Rust crates proton-crypto and proton-crypto-account)
+   - Source: https://github.com/ProtonMail/proton-crypto-rs, used by crates/pdcore (versions
+     in Cargo.lock), linked into the PDrive programs. The related crates proton-rpgp and
+     proton-srp come from the same project.
+   - Licence: MIT, Copyright (c) 2025 Proton AG (as stated in the LICENSE file shipped in
+     each of these crates; the licence text is in the crate sources).
+
+4. Other Rust crates of the PDrive programs (pdrive, pdrived, pdrive-app)
+   - Vendored in the source archive pdrive-for-linux-<version>.tar.xz under vendor/, each
+     with its own licence files.
+   - THIRD_PARTY_CRATES.txt in that archive lists name, version and licence expression of
+     each crate, generated from `cargo metadata`.
+   - To list the dependencies of a source checkout with their licences, run for example
+     `cargo license` (cargo-license) or `cargo about generate` (cargo-about, which also
+     collects the licence texts). The list changes with Cargo.lock: it is not reproduced here.
+
+   NuGet packages (inside the NativeAOT library, see item 1): after
+   scripts/build-native.sh, `dotnet list package --include-transitive` run on
+   third_party/sdk gives the packages and versions; their licences are in the .nuspec or
+   LICENSE files of each package (tools such as nuget-license can summarise them).
+
+5. System libraries
+   - GTK 4, libadwaita, GLib/GIO, libnautilus-extension, FUSE (fusermount3), glibc and
+     libgcc are not bundled: they are used from the distribution (dependencies of the
+     package) under their own licences.
+
+The licence files of the sources above are in third_party/ after scripts/build-native.sh
+and in the native archive. To be reviewed by a human before any public distribution.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Local cache of decrypted file contents, one file per revision.
 //!
 //! Opening a file that is not cached starts a download in the background and returns at once:

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Browser sign-in through a session fork: the user signs in on account.proton.me, which hands a
 //! child session and the encrypted key password back to this client. The client never sees the
 //! account password, and CAPTCHA and 2FA are handled by Proton's web page.

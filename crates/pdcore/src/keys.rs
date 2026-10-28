@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Account data the SDK asks for: addresses and their unlocked private keys.
 
 use anyhow::{bail, Result};

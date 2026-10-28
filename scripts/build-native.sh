@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Bertrand Presles
 # Builds the native libraries the Rust client links against:
 #   - libproton_crypto.so    (Proton's Rust OpenPGP/SRP FFI, from ProtonDriveApps/dotnet-crypto)
 #   - libproton_drive_sdk.so (Proton Drive C# SDK compiled with NativeAOT, from ProtonDriveApps/sdk)

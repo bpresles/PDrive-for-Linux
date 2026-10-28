@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Replays remote changes through the mount.
 //!
 //! The kernel only emits inotify events for operations that go through the VFS, and file

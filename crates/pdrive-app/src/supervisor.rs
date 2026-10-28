@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Runs `pdrived` as a child process and restarts it when it fails, with a growing delay
 //! (like `Restart=on-failure`). It is not started without a session in the keyring, nor when
 //! another daemon already owns the D-Bus name.

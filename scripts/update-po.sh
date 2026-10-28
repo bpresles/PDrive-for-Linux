@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Bertrand Presles
 # Regenerates po/pdrive.pot from the sources listed in po/POTFILES, then merges it into the
 # catalogue of each language of po/LINGUAS. Start a new language with:
 #   msginit --no-translator -i po/pdrive.pot -l LANG -o po/LANG.po   (and add LANG to po/LINGUAS)

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Where the file system is really mounted, and the path it is reached through.
 //!
 //! GIO lists the FUSE mounts of the home folder as volumes (`g_unix_mount_entry_guess_should_display`

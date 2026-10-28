@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! D-Bus service on the session bus, run on its own thread with a GLib main loop.
 //!
 //! - `io.github.bpresles.PDrive1` at `/io/github/bpresles/PDrive`: per-file state and offline

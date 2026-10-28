@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Settings file shared with the daemon (`$XDG_CONFIG_HOME/pdrive/config.toml`, see
 //! `crates/pdrived/src/config.rs`), edited while preserving comments and layout, and the XDG
 //! autostart entry.

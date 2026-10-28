@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Bertrand Presles
 # Installs the parts of PDrive for Linux that must live in system directories (needs sudo):
 #   the Nautilus extension (Nautilus only loads extensions from its system directory), and
 #   the libcloudproviders declaration (only read from system data directories),

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Files kept available offline: downloaded ahead of use, never purged from the cache, and
 //! downloaded again when they get a new revision. Saved in `$XDG_DATA_HOME/pdrive/pinned.json`.
 

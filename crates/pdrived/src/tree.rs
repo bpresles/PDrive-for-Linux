@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! In-memory view of the remote tree, indexed by inode number.
 //!
 //! Folder listings are loaded lazily and kept up to date from Drive events. Inode numbers are

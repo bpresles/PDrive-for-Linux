@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Read-only FUSE file system over the remote tree.
 //!
 //! Callbacks that may hit the network run on the Tokio runtime and reply from there, so the

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Per-file sync state for the file manager integration, and the offline actions.
 
 use std::path::Path;

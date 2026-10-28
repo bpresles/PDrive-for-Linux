@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Fills the freedesktop.org thumbnail cache with the thumbnails stored by Proton Drive.
 //!
 //! File managers look up `$XDG_CACHE_HOME/thumbnails/<size>/<md5(uri)>.png` and only generate a

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! State shared by the FUSE callbacks and the event watcher.
 
 use std::path::PathBuf;

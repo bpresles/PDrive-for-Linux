@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Settings, from `$XDG_CONFIG_HOME/pdrive/config.toml`:
 //!
 //! ```toml

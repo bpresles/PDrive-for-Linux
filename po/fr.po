@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pdrive\n"
 "Report-Msgid-Bugs-To: https://github.com/bpresles/PDrive-for-Linux/issues\n"
-"POT-Creation-Date: 2026-10-28 22:21+0100\n"
+"POT-Creation-Date: 2026-10-28 22:34+0100\n"
 "PO-Revision-Date: 2026-10-28 22:02+0100\n"
 "Last-Translator: PDrive for Linux authors\n"
 "Language-Team: French\n"
@@ -17,29 +17,29 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: crates/pdrive-app/src/main.rs:396
+#: crates/pdrive-app/src/main.rs:399
 msgid "Sign-in failed"
 msgstr "Échec de la connexion"
 
-#: crates/pdrive-app/src/main.rs:396
+#: crates/pdrive-app/src/main.rs:399
 msgid "The sign-in did not complete. Try again."
 msgstr "La connexion n’a pas abouti. Réessayez."
 
-#: crates/pdrive-app/src/main.rs:410
+#: crates/pdrive-app/src/main.rs:413
 msgid "Sign-out failed"
 msgstr "Échec de la déconnexion"
 
-#: crates/pdrive-app/src/main.rs:410
+#: crates/pdrive-app/src/main.rs:413
 msgid "The session could not be removed. See the logs of the application."
 msgstr ""
 "La session n’a pas pu être supprimée. Consultez les journaux de "
 "l’application."
 
-#: crates/pdrive-app/src/main.rs:423
+#: crates/pdrive-app/src/main.rs:426
 msgid "Start PDrive when you log in?"
 msgstr "Lancer PDrive à l’ouverture de session ?"
 
-#: crates/pdrive-app/src/main.rs:423
+#: crates/pdrive-app/src/main.rs:426
 msgid ""
 "The Proton Drive folder is then mounted automatically. You can change this "
 "in the settings."
@@ -47,66 +47,66 @@ msgstr ""
 "Le dossier Proton Drive est alors monté automatiquement. Vous pouvez "
 "modifier ce choix dans les réglages."
 
-#: crates/pdrive-app/src/main.rs:424
+#: crates/pdrive-app/src/main.rs:427
 msgid "Not now"
 msgstr "Pas maintenant"
 
-#: crates/pdrive-app/src/main.rs:424
+#: crates/pdrive-app/src/main.rs:427
 msgid "Start at login"
 msgstr "Lancer à l’ouverture de session"
 
-#: crates/pdrive-app/src/main.rs:439
+#: crates/pdrive-app/src/main.rs:442
 msgid "OK"
 msgstr "OK"
 
-#: crates/pdrive-app/src/settings.rs:14 crates/pdrive-app/src/tray.rs:100
-#: crates/pdrive-app/src/window.rs:69
+#: crates/pdrive-app/src/settings.rs:16 crates/pdrive-app/src/tray.rs:102
+#: crates/pdrive-app/src/window.rs:71
 msgid "Settings"
 msgstr "Réglages"
 
-#: crates/pdrive-app/src/settings.rs:17
+#: crates/pdrive-app/src/settings.rs:19
 msgid "Changes apply when the dialog is closed, restarting the service."
 msgstr ""
 "Les modifications s’appliquent à la fermeture de la fenêtre, avec un "
 "redémarrage du service."
 
-#: crates/pdrive-app/src/settings.rs:17
+#: crates/pdrive-app/src/settings.rs:19
 msgid "Synchronization"
 msgstr "Synchronisation"
 
-#: crates/pdrive-app/src/settings.rs:18
+#: crates/pdrive-app/src/settings.rs:20
 msgid "Mount point"
 msgstr "Point de montage"
 
-#: crates/pdrive-app/src/settings.rs:20
+#: crates/pdrive-app/src/settings.rs:22
 msgid "Cache size (GiB)"
 msgstr "Taille du cache (Gio)"
 
-#: crates/pdrive-app/src/settings.rs:28
+#: crates/pdrive-app/src/settings.rs:30
 msgid "Start when I log in"
 msgstr "Lancer à l’ouverture de session"
 
-#: crates/pdrive-app/src/settings.rs:32 crates/pdrive-app/src/settings.rs:40
+#: crates/pdrive-app/src/settings.rs:34 crates/pdrive-app/src/settings.rs:42
 msgid "Cannot change the startup setting"
 msgstr "Impossible de modifier le réglage de démarrage"
 
-#: crates/pdrive-app/src/settings.rs:36
+#: crates/pdrive-app/src/settings.rs:38
 msgid "Show the status window at startup"
 msgstr "Ouvrir la fenêtre d’état au démarrage"
 
-#: crates/pdrive-app/src/settings.rs:46
+#: crates/pdrive-app/src/settings.rs:48
 msgid "Account"
 msgstr "Compte"
 
-#: crates/pdrive-app/src/settings.rs:48 crates/pdrive-app/src/settings.rs:53
+#: crates/pdrive-app/src/settings.rs:50 crates/pdrive-app/src/settings.rs:55
 msgid "Sign out"
 msgstr "Se déconnecter"
 
-#: crates/pdrive-app/src/settings.rs:52
+#: crates/pdrive-app/src/settings.rs:54
 msgid "Sign out?"
 msgstr "Se déconnecter ?"
 
-#: crates/pdrive-app/src/settings.rs:52
+#: crates/pdrive-app/src/settings.rs:54
 msgid ""
 "The service is stopped and the session is removed from this computer. "
 "Pending uploads are resumed after the next sign-in."
@@ -114,61 +114,61 @@ msgstr ""
 "Le service est arrêté et la session est supprimée de cet ordinateur. Les "
 "envois en attente reprendront après la prochaine connexion."
 
-#: crates/pdrive-app/src/settings.rs:53
+#: crates/pdrive-app/src/settings.rs:55
 msgid "Cancel"
 msgstr "Annuler"
 
-#: crates/pdrive-app/src/tray.rs:94 crates/pdrive-app/src/window.rs:197
-#: crates/pdrived/src/dbus.rs:383
+#: crates/pdrive-app/src/tray.rs:96 crates/pdrive-app/src/window.rs:199
+#: crates/pdrived/src/dbus.rs:385
 msgid "Mount"
 msgstr "Monter"
 
-#: crates/pdrive-app/src/tray.rs:94 crates/pdrive-app/src/window.rs:201
-#: crates/pdrived/src/dbus.rs:381
+#: crates/pdrive-app/src/tray.rs:96 crates/pdrive-app/src/window.rs:203
+#: crates/pdrived/src/dbus.rs:383
 msgid "Unmount"
 msgstr "Démonter"
 
-#: crates/pdrive-app/src/tray.rs:96 crates/pdrive-app/src/window.rs:104
+#: crates/pdrive-app/src/tray.rs:98 crates/pdrive-app/src/window.rs:106
 msgid "Open folder"
 msgstr "Ouvrir le dossier"
 
-#: crates/pdrive-app/src/tray.rs:97
+#: crates/pdrive-app/src/tray.rs:99
 msgid "Show status window"
 msgstr "Afficher la fenêtre d’état"
 
-#: crates/pdrive-app/src/tray.rs:102
+#: crates/pdrive-app/src/tray.rs:104
 msgid "Quit"
 msgstr "Quitter"
 
-#: crates/pdrive-app/src/window.rs:29
+#: crates/pdrive-app/src/window.rs:31
 msgid "Not signed in"
 msgstr "Non connecté"
 
-#: crates/pdrive-app/src/window.rs:30
+#: crates/pdrive-app/src/window.rs:32
 msgid "Starting…"
 msgstr "Démarrage…"
 
-#: crates/pdrive-app/src/window.rs:31
+#: crates/pdrive-app/src/window.rs:33
 msgid "Service not running"
 msgstr "Service arrêté"
 
-#: crates/pdrive-app/src/window.rs:32
+#: crates/pdrive-app/src/window.rs:34
 msgid "Not mounted"
 msgstr "Non monté"
 
-#: crates/pdrive-app/src/window.rs:33
+#: crates/pdrive-app/src/window.rs:35
 msgid "Syncing…"
 msgstr "Synchronisation…"
 
-#: crates/pdrive-app/src/window.rs:34 crates/pdrived/src/dbus.rs:273
+#: crates/pdrive-app/src/window.rs:36 crates/pdrived/src/dbus.rs:275
 msgid "Up to date"
 msgstr "À jour"
 
-#: crates/pdrive-app/src/window.rs:35
+#: crates/pdrive-app/src/window.rs:37
 msgid "Error: an upload failed"
 msgstr "Erreur : un envoi a échoué"
 
-#: crates/pdrive-app/src/window.rs:66
+#: crates/pdrive-app/src/window.rs:68
 msgid ""
 "No notification area found. On GNOME, enable the “AppIndicator and "
 "KStatusNotifierItem Support” extension to get the PDrive icon."
@@ -177,155 +177,155 @@ msgstr ""
 "« AppIndicator and KStatusNotifierItem Support » pour afficher l’icône de "
 "PDrive."
 
-#: crates/pdrive-app/src/window.rs:74 crates/pdrive-app/src/window.rs:186
+#: crates/pdrive-app/src/window.rs:76 crates/pdrive-app/src/window.rs:188
 msgid "Sign in"
 msgstr "Se connecter"
 
-#: crates/pdrive-app/src/window.rs:79
+#: crates/pdrive-app/src/window.rs:81
 msgid "Sign in to Proton Drive"
 msgstr "Se connecter à Proton Drive"
 
-#: crates/pdrive-app/src/window.rs:80
+#: crates/pdrive-app/src/window.rs:82
 msgid "Unofficial third-party application, not affiliated with Proton AG."
 msgstr "Application tierce non officielle, non affiliée à Proton AG."
 
-#: crates/pdrive-app/src/window.rs:99
+#: crates/pdrive-app/src/window.rs:101
 msgid "No recent activity"
 msgstr "Aucune activité récente"
 
-#: crates/pdrive-app/src/window.rs:106
+#: crates/pdrive-app/src/window.rs:108
 msgid "View online"
 msgstr "Voir en ligne"
 
-#: crates/pdrive-app/src/window.rs:186
+#: crates/pdrive-app/src/window.rs:188
 msgid "Waiting for the browser…"
 msgstr "En attente du navigateur…"
 
-#: crates/pdrive-app/src/window.rs:231
+#: crates/pdrive-app/src/window.rs:233
 #, rust-format
 msgid "{} used of {}"
 msgstr "{} utilisés sur {}"
 
-#: crates/pdrive-app/src/window.rs:263
+#: crates/pdrive-app/src/window.rs:265
 msgid "Uploading…"
 msgstr "Envoi en cours…"
 
-#: crates/pdrive-app/src/window.rs:264
+#: crates/pdrive-app/src/window.rs:266
 msgid "Upload failed"
 msgstr "Échec de l’envoi"
 
-#: crates/pdrive-app/src/window.rs:265
+#: crates/pdrive-app/src/window.rs:267
 msgid "Uploaded"
 msgstr "Envoyé"
 
-#: crates/pdrive-app/src/window.rs:266
+#: crates/pdrive-app/src/window.rs:268
 msgid "Downloading…"
 msgstr "Téléchargement en cours…"
 
-#: crates/pdrive-app/src/window.rs:267
+#: crates/pdrive-app/src/window.rs:269
 msgid "Download failed"
 msgstr "Échec du téléchargement"
 
-#: crates/pdrive-app/src/window.rs:268
+#: crates/pdrive-app/src/window.rs:270
 msgid "Downloaded"
 msgstr "Téléchargé"
 
-#: crates/pdrive-app/src/window.rs:269
+#: crates/pdrive-app/src/window.rs:271
 msgid "Renamed"
 msgstr "Renommé"
 
-#: crates/pdrive-app/src/window.rs:270
+#: crates/pdrive-app/src/window.rs:272
 msgid "Moved"
 msgstr "Déplacé"
 
-#: crates/pdrive-app/src/window.rs:271
+#: crates/pdrive-app/src/window.rs:273
 msgid "Moved to trash"
 msgstr "Mis à la corbeille"
 
-#: crates/pdrive-app/src/window.rs:272
+#: crates/pdrive-app/src/window.rs:274
 msgid "Added online"
 msgstr "Ajouté en ligne"
 
-#: crates/pdrive-app/src/window.rs:273
+#: crates/pdrive-app/src/window.rs:275
 msgid "Renamed online"
 msgstr "Renommé en ligne"
 
-#: crates/pdrive-app/src/window.rs:274
+#: crates/pdrive-app/src/window.rs:276
 msgid "Updated online"
 msgstr "Mis à jour en ligne"
 
-#: crates/pdrive-app/src/window.rs:275
+#: crates/pdrive-app/src/window.rs:277
 msgid "Removed online"
 msgstr "Supprimé en ligne"
 
-#: crates/pdrive-app/src/window.rs:283
+#: crates/pdrive-app/src/window.rs:285
 msgid "Just now"
 msgstr "À l’instant"
 
-#: crates/pdrive-app/src/window.rs:284
+#: crates/pdrive-app/src/window.rs:286
 #, rust-format
 msgid "{} minute ago"
 msgid_plural "{} minutes ago"
 msgstr[0] "Il y a {} minute"
 msgstr[1] "Il y a {} minutes"
 
-#: crates/pdrive-app/src/window.rs:285
+#: crates/pdrive-app/src/window.rs:287
 #, rust-format
 msgid "{} hour ago"
 msgid_plural "{} hours ago"
 msgstr[0] "Il y a {} heure"
 msgstr[1] "Il y a {} heures"
 
-#: crates/pdrive-app/src/window.rs:286
+#: crates/pdrive-app/src/window.rs:288
 #, rust-format
 msgid "{} day ago"
 msgid_plural "{} days ago"
 msgstr[0] "Il y a {} jour"
 msgstr[1] "Il y a {} jours"
 
-#: crates/pdrived/src/dbus.rs:257
+#: crates/pdrived/src/dbus.rs:259
 #, rust-format
 msgid "{} (unofficial client) · {}"
 msgstr "{} (client non officiel) · {}"
 
-#: crates/pdrived/src/dbus.rs:262
+#: crates/pdrived/src/dbus.rs:264
 msgid "Not mounted: use Mount in the menu"
 msgstr "Non monté : utilisez « Monter » dans le menu"
 
-#: crates/pdrived/src/dbus.rs:267
+#: crates/pdrived/src/dbus.rs:269
 #, rust-format
 msgid "{} file to upload"
 msgid_plural "{} files to upload"
 msgstr[0] "{} fichier à envoyer"
 msgstr[1] "{} fichiers à envoyer"
 
-#: crates/pdrived/src/dbus.rs:270
+#: crates/pdrived/src/dbus.rs:272
 #, rust-format
 msgid "{} file downloading"
 msgid_plural "{} files downloading"
 msgstr[0] "{} fichier en cours de téléchargement"
 msgstr[1] "{} fichiers en cours de téléchargement"
 
-#: crates/pdrived/src/dbus.rs:329
+#: crates/pdrived/src/dbus.rs:331
 msgid "Show status"
 msgstr "Afficher l’état"
 
-#: crates/pdrived/src/dbus.rs:330
+#: crates/pdrived/src/dbus.rs:332
 msgid "Open in the browser"
 msgstr "Ouvrir dans le navigateur"
 
-#: extension/pdrive-nautilus.c:332
+#: extension/pdrive-nautilus.c:333
 msgid "Keep Available Offline"
 msgstr "Garder disponible hors ligne"
 
-#: extension/pdrive-nautilus.c:333
+#: extension/pdrive-nautilus.c:334
 msgid "Download and keep available without network"
 msgstr "Télécharger et garder disponible sans réseau"
 
-#: extension/pdrive-nautilus.c:335
+#: extension/pdrive-nautilus.c:336
 msgid "Free Up Space"
 msgstr "Libérer de l’espace"
 
-#: extension/pdrive-nautilus.c:336
+#: extension/pdrive-nautilus.c:337
 msgid "Remove the downloaded copy, keeping it in the cloud"
 msgstr "Supprimer la copie téléchargée, en la conservant dans le cloud"

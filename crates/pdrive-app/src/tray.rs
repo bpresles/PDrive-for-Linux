@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! StatusNotifierItem tray icon (`ksni`).
 //!
 //! ksni runs on tokio (zbus), GTK on the GLib main loop: the icon lives on its own thread with

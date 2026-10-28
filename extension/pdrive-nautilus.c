@@ -7,6 +7,7 @@
  * daemon, queried over D-Bus (io.github.bpresles.PDrive1): this extension runs inside Nautilus
  * and is kept minimal, asynchronous and passive when the daemon is not running.
  *
+ * Copyright (C) 2026 Bertrand Presles
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Client of the D-Bus interface of `pdrived` (`io.github.bpresles.PDrive1`).
 
 use std::rc::Rc;

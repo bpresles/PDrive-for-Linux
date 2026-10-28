@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Keeps the logs when the application is started from a launcher (standard error on
 //! `/dev/null`). The daemon writes to the standard error output of this program, so redirecting
 //! this one is enough. Nothing changes when it is a terminal or already a stream of the journal.

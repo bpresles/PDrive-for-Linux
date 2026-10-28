@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Hand-written subset of `proton.drive.sdk.proto` (package `proton.drive.sdk`).
 //!
 //! The upstream file uses Protobuf editions (2023), which prost-build does not handle yet, so the

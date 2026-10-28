@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! PDrive for Linux command-line tool.
 //!
 //!     pdrive login          sign in through the browser, store the session in the keyring

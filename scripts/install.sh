@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Bertrand Presles
 # Installs PDrive for Linux for the current user:
 #   ~/.local/lib/pdrive/                    native libraries (Proton Drive SDK and crypto)
 #   ~/.local/bin/pdrive-app, pdrived, pdrive  desktop application (tray icon, status window; it

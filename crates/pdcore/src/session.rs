@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Session persistence in the Secret Service (GNOME Keyring) through oo7.
 
 use std::collections::HashMap;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 /// Honest client identification required by Proton for third-party applications:
 /// `external-drive-{name}@{semver}-{channel}`.
 pub const APP_VERSION: &str = concat!("external-drive-pdrive_for_linux@", env!("CARGO_PKG_VERSION"), "-alpha");

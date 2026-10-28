@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Status window: account and storage, recent activity, state bar.
 
 use std::cell::RefCell;

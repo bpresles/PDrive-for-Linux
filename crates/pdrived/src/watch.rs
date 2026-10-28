@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Keeps the mounted tree up to date from the Drive event stream of the volume. Changes that
 //! affect loaded folders are replayed through the mount (see `replay.rs`).
 

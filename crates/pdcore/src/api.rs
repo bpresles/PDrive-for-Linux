@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Authenticated HTTP client for the Proton API, shared by the account code and the SDK host.
 
 use anyhow::{bail, Context, Result};

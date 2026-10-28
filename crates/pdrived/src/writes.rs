@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Write support.
 //!
 //! Writes go to a local staging file; the file is uploaded (as a new file, or as a new revision

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! In-memory journal of recent activity (transfers and changes), shown by the status window.
 //! Exposed by D-Bus through `GetRecentActivity`; `ActivityChanged` is emitted on each change.
 

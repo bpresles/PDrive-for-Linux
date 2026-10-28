@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Bertrand Presles
 //! Translations: gettext, domain `pdrive`. Texts are written in English in the code, through
 //! `tr`, `tr_fmt` and `tr_n` (the keywords of `scripts/update-po.sh`).
 
