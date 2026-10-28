@@ -1,6 +1,6 @@
 # PDrive for Linux — plan des prochaines évolutions
 
-Document de reprise : état du projet au 27/10/2026 et évolutions prévues.
+Document de reprise : état du projet au 28/10/2026 et évolutions prévues.
 
 ## État actuel
 
@@ -9,12 +9,14 @@ Client tiers non officiel pour Proton Drive, intégré à Nautilus (GNOME Fichie
 - `crates/pdsdk` : liaisons Rust avec le SDK officiel de Proton (C#, compilé en NativeAOT, appelé via son interface C et Protobuf).
 - `crates/pdcore` : connexion par navigateur, session dans le trousseau (Secret Service), clés du compte, hôte HTTP du SDK.
 - `crates/pdrive` : outil en ligne de commande (`login`, `logout`, `ls`, `selftest`).
-- `crates/pdrived` : service de montage FUSE (`~/ProtonDrive`), avec :
+- `crates/pdrive-app` : application de bureau (icône de notification, fenêtre de statut, réglages), qui lance et surveille `pdrived`.
+- `crates/pdi18n` : traductions gettext partagées (catalogues dans `po/`).
+- `crates/pdrived` : daemon de montage FUSE (`~/ProtonDrive`, lien vers le montage réel `~/.local/share/pdrive/.mount`), avec :
   - téléchargement à la demande et lecture progressive ;
   - écriture, avec envoi à la fermeture et révisions ;
   - événements Drive rejoués pour la mise à jour en direct ;
   - miniatures Proton, cache limité, reprise des envois interrompus ;
-  - service D-Bus et compte CloudProviders.
+  - service D-Bus (état, compte, quota, activité récente) et compte CloudProviders.
 - `extension/` : extension Nautilus en C (emblèmes d'état, « Keep Available Offline », « Free Up Space », rechargement au montage).
 - `scripts/` : compilation des bibliothèques natives, installation utilisateur (`install.sh`) et système (`install-system.sh`).
 
@@ -42,10 +44,11 @@ Dépôt : https://github.com/bpresles/PDrive-for-Linux (privé jusqu'à la fin d
 - [ ] Installation :
   - prérequis : Fedora/Debian, FUSE 3, .NET 10 SDK pour compiler le SDK, `nautilus-devel` pour l'extension ;
   - `install.sh`, `install-system.sh` ;
-  - `pdrive login`, activation du service.
+  - lancement de l'application, connexion, démarrage automatique ;
+  - sous GNOME, activation de l'extension AppIndicator pour l'icône de notification.
 - [ ] Architecture, avec un schéma : SDK NativeAOT, `pdrived`, FUSE, D-Bus, extension, CloudProviders.
 - [ ] Limites connues : permissions et date seule non conservées, fichiers « Partagés avec moi » et photos non gérés, `O_NOATIME` refusé sur les fichiers non mis en cache.
-- [ ] Configuration (`~/.config/pdrive/config.toml`), journaux (`journalctl --user -u pdrive`), désinstallation.
+- [ ] Configuration (`~/.config/pdrive/config.toml`), journaux, désinstallation.
 
 ### Licences
 
@@ -80,7 +83,8 @@ Dépôt : https://github.com/bpresles/PDrive-for-Linux (privé jusqu'à la fin d
   - extension dans le dossier des extensions Nautilus ;
   - `.ini` dans `/usr/share/cloud-providers/` ;
   - icônes dans `/usr/share/icons/hicolor/` ;
-  - unité systemd utilisateur dans `/usr/lib/systemd/user/`.
+  - `/usr/bin/pdrive-app` et son `.desktop` dans `/usr/share/applications/` (plus d'unité systemd, voir partie 2) ;
+  - catalogues de traduction dans `/usr/share/locale/<langue>/LC_MESSAGES/pdrive.mo`.
 - [ ] RPM : fichier `.spec`, publication via COPR.
 - [ ] DEB : `debian/` ou `cargo-deb`, avec dépendances `fuse3`, `libnautilus-extension4`, `gnome-keyring` ou fournisseur Secret Service.
 - [ ] Workflow GitHub Actions déclenché par un tag `v*` : compilation, paquets, sommes de contrôle, release GitHub.
@@ -88,38 +92,63 @@ Dépôt : https://github.com/bpresles/PDrive-for-Linux (privé jusqu'à la fin d
 
 ## 2. Compléter les fonctions
 
+Réalisé le 28/10/2026 (commits « Desktop application with tray icon and status window », « Translations with gettext, French first », « Single sidebar entry… »). Testé : compilation, clippy, enregistrement de l'icône sous Hyprland/waybar, API D-Bus, montage caché et journaux. Reste à valider à l'usage : fenêtre de statut et réglages, connexion/déconnexion depuis l'app, rendu sous KDE et GNOME (extension AppIndicator), menus traduits dans Nautilus.
+
+### Application de bureau et cycle de vie du daemon
+
+Le service systemd utilisateur (`pdrive.service`) est remplacé par une application de bureau qui lance le daemon.
+
+- [x] Nouvelle crate `crates/pdrive-app` (binaire `pdrive-app`) : application GTK4/libadwaita à instance unique (`gtk::Application`, identifiant `io.github.pdrive.PDrive.App`, renommé avec le reste en partie 1).
+  - Au démarrage, elle lance `pdrived` comme processus enfant si une session existe et si le nom D-Bus du daemon n'est pas déjà pris, puis le surveille : redémarrage en cas d'échec avec délai croissant, comme `Restart=on-failure`.
+  - Elle reste active sans fenêtre (`hold`) : fermer la fenêtre de statut ne quitte pas l'application.
+  - Seule l'entrée « Quitter » du menu de l'icône la ferme : arrêt propre du daemon (SIGTERM, démontage, envois en attente repris au prochain démarrage), puis sortie.
+  - Relancer l'application alors qu'elle tourne déjà affiche la fenêtre de statut.
+- [x] Démarrage automatique avec la session, activé depuis les réglages : fichier XDG autostart `~/.config/autostart/io.github.pdrive.PDrive.App.desktop` (`Exec=pdrive-app --background`), reconnu par GNOME, KDE, XFCE, Cinnamon, MATE, LXQt et la plupart des compositeurs. Désactivé par défaut, proposé après la première connexion.
+- [x] Fichier `.desktop` de l'application (menu des applications) et icône d'application.
+- [x] Migration : `install.sh` désactive et supprime `pdrive.service` ; `pdrived` reste lançable seul pour le débogage.
+- [x] Journaux : sortie du daemon relayée par l'application vers le journal (`journalctl --user -t pdrive` ou fichier dans `$XDG_STATE_HOME/pdrive/`).
+- [x] Le daemon s'arrête si l'application meurt (`PR_SET_PDEATHSIG`).
+- [x] Option « Ouvrir la fenêtre d'état au démarrage » (activée par défaut), pour un lancement depuis le menu ; `--background` (session) n'ouvre jamais la fenêtre.
+- [x] Une seule entrée dans la barre latérale : `x-gvfs-hide` n'atteint jamais GIO (`fusermount3` n'écrit pas `/run/mount/utab`). Le FUSE est donc monté dans un chemin caché (`$XDG_DATA_HOME/pdrive/.mount`, ignoré par GLib et gvfs) et `~/ProtonDrive` en devient un lien symbolique. Propriété D-Bus `MountTarget` pour le chemin réel.
+
 ### Traductions
 
-- [ ] Rendre traduisibles les textes du service (menu de la barre latérale, état, infobulle) et de l'extension (menu contextuel).
-- [ ] gettext : `gettext-rs` côté Rust, gettext classique côté C. Domaine `pdrive`, catalogues `po/`.
-- [ ] Première langue : le français.
+- [x] Rendre traduisibles les textes du daemon (menu de la barre latérale, état, infobulle), de l'application (icône, menu, fenêtre de statut, réglages) et de l'extension (menu contextuel).
+- [x] gettext : `gettext-rs` côté Rust, gettext classique côté C. Domaine `pdrive`, catalogues `po/`.
+- [x] Première langue : le français (`po/fr.po`, mise à jour avec `scripts/update-po.sh`).
 
 ### Icône dans la barre de notification et fenêtre de statut
 
-Objectif : une icône de dossier violette dans la barre du haut, comme sur macOS. Un clic ouvre une fenêtre de statut comparable au client officiel macOS, **sans le bouton « Add storage »**.
+Objectif : une icône de dossier violette dans la barre de notification, sous GNOME comme sous KDE et les autres environnements. Un clic ouvre une fenêtre de statut comparable au client officiel macOS, **sans le bouton « Add storage »**. Un clic droit ouvre un menu : « Ouvrir le dossier », « Afficher la fenêtre de statut », « Monter / Démonter », « Réglages », « Quitter ».
 
 Contenu de la fenêtre :
 
-- [ ] **En-tête :** avatar (initiales), adresse du compte, espace utilisé (« Using X GB of Y GB »), bouton de réglages.
-  - Quota : `GET core/v4/users`, à vérifier : `UsedSpace`/`MaxSpace` ou équivalents Drive.
-- [ ] **Liste d'activité récente :** fichiers en cours d'envoi ou de téléchargement (« Syncing… » avec indicateur) et opérations terminées, avec heure relative et taille. Exemples : « Uploaded 2 min ago | 0,3 MB », « Renamed », « Moved to trash ».
+- [x] **En-tête :** avatar (initiales), adresse du compte, espace utilisé (« Using X GB of Y GB »), bouton de réglages.
+  - Quota : `GET core/v4/users`, champs `UsedSpace`/`MaxSpace` du compte (total du compte, pas la seule part Drive).
+- [x] **Liste d'activité récente :** fichiers en cours d'envoi ou de téléchargement (« Syncing… » avec indicateur) et opérations terminées, avec heure relative et taille. Exemples : « Uploaded 2 min ago | 0,3 MB », « Renamed », « Moved to trash ».
   - Nécessite un journal d'activité dans `pdrived` : envois, téléchargements, renommages, suppressions, changements distants. Il serait exposé par D-Bus (méthode `GetRecentActivity` et signal `ActivityChanged`).
-- [ ] **Barre d'état :** « Syncing… », « Up to date », « Not mounted », « Not signed in », erreurs.
-- [ ] **Boutons :**
+- [x] **Barre d'état :** « Syncing… », « Up to date », « Not mounted », « Not signed in », erreurs.
+- [x] **Boutons :**
   - « Open folder » (ouvre `~/ProtonDrive`) ;
   - « View online » (ouvre `https://drive.proton.me`) ;
   - pas de « Add storage ».
-- [ ] **État de connexion :** si aucune session, la fenêtre propose « Se connecter », qui lance la connexion par navigateur, l'équivalent de `pdrive login`, avec la mention « application tierce non officielle ». Après connexion, le service démarre ou monte automatiquement.
-- [ ] **Réglages :** point de montage, taille du cache, déconnexion, démarrage automatique.
+- [x] **État de connexion :** si aucune session, la fenêtre propose « Se connecter », qui lance la connexion par navigateur, l'équivalent de `pdrive login`, avec la mention « application tierce non officielle ». Après connexion, le service démarre ou monte automatiquement.
+- [x] **Réglages :** point de montage, taille du cache, déconnexion, démarrage automatique, ouverture de la fenêtre au démarrage.
 
-Choix techniques à trancher :
+Choix techniques (tranchés le 28/10/2026) :
 
-- **Icône dans la barre :** GNOME Shell n'affiche pas les icônes de notification nativement. Options :
-  1. StatusNotifierItem (protocole `org.kde.StatusNotifierItem`, crate `ksni`). Il exige l'extension GNOME « AppIndicator and KStatusNotifierItem Support », présente par défaut sur Ubuntu mais pas sur Fedora Workstation.
-  2. Extension GNOME Shell dédiée (JavaScript), qui afficherait l'icône et un menu ou une fenêtre natifs, en parlant au service par D-Bus. C'est la meilleure intégration, mais elle est à maintenir selon les versions de GNOME Shell.
-  3. Les deux : StatusNotifierItem par défaut, plus une extension Shell optionnelle.
-- **Fenêtre de statut :** application GTK4/libadwaita en Rust (`gtk4-rs`, `libadwaita-rs`), lancée à la demande et pilotée par D-Bus. Elle pourrait aussi être déclenchée depuis le menu de l'entrée « Proton Drive » de la barre latérale.
-- **Icône :** dossier violet, à dessiner sans reprendre le logo Proton. Variantes : synchronisé, en cours de synchronisation, erreur, déconnecté.
+- **Icône dans la barre : StatusNotifierItem** (protocole `org.kde.StatusNotifierItem` et menu `com.canonical.dbusmenu`), avec la crate `ksni` dans `pdrive-app`.
+  - C'est le seul mécanisme commun : natif sous KDE Plasma, LXQt, XFCE, Cinnamon, MATE, Budgie, et sous les compositeurs avec waybar ou équivalent (Hyprland, Sway). Sous GNOME, il passe par l'extension « AppIndicator and KStatusNotifierItem Support », installée par défaut sur Ubuntu et empaquetée par Fedora (`gnome-shell-extension-appindicator`). Elle sera mise en dépendance recommandée des paquets.
+  - L'ancien protocole XEmbed n'est pas retenu : il ne fonctionne pas sous Wayland.
+  - Si aucun `org.kde.StatusNotifierWatcher` n'est présent au démarrage, l'application ouvre la fenêtre de statut, qui affiche un bandeau expliquant comment activer l'extension sous GNOME. `ksni` s'enregistre de lui-même dès qu'un watcher apparaît.
+  - Une extension GNOME Shell dédiée est écartée pour l'instant : elle ne servirait qu'à GNOME et serait à maintenir à chaque version (voir le backlog).
+- **Fenêtre de statut et réglages :** dans `pdrive-app` (`gtk4-rs`, `libadwaita-rs`), avec les données du daemon lues par D-Bus. L'entrée « Proton Drive » de la barre latérale gagne une action « Afficher l'état » qui active l'application.
+- **Interface D-Bus du daemon** (`io.github.pdrive.PDrive1`), à compléter :
+  - propriétés `State` (`syncing`, `idle`, `unmounted`, `error`), `Account` (adresse), `UsedSpace` et `MaxSpace` (octets), avec `PropertiesChanged` ;
+  - méthodes `GetRecentActivity` (liste d'entrées : chemin, type, taille, horodatage, état) et `Mount` / `Unmount` ;
+  - signal `ActivityChanged`.
+- **Connexion :** sans session, l'application ne lance pas le daemon et sa fenêtre propose « Se connecter », qui exécute `pdrive login` (mention « application tierce non officielle » affichée dans la fenêtre), puis lance le daemon. « Se déconnecter » arrête le daemon puis exécute `pdrive logout`.
+- **Icône :** dossier violet, à dessiner en SVG sans reprendre le logo Proton. Variantes : synchronisé, en cours de synchronisation, erreur, déconnecté. Elles sont installées dans le thème `hicolor` et transmises par nom (`IconName`) ; pas de repli en pixmap pour l'instant.
 
 ## 3. Autres pistes (backlog)
 
@@ -128,4 +157,5 @@ Choix techniques à trancher :
 - [ ] Miniatures envoyées avec les nouveaux fichiers (le SDK accepte des miniatures à l'envoi).
 - [ ] Corbeille de Nautilus sur le montage (aujourd'hui, la suppression passe directement dans la corbeille Proton).
 - [ ] Notification de bureau si la session expire ou si un envoi échoue définitivement.
+- [ ] Extension GNOME Shell dédiée (optionnelle), si l'extension AppIndicator s'avère insuffisante.
 - [ ] Mettre à jour régulièrement le SDK Proton, notamment pour la migration cryptographique annoncée.
