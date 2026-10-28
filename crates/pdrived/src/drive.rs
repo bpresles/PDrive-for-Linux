@@ -64,8 +64,10 @@ pub struct Drive {
     /// state rather than requests: repeated or stale clicks cannot pile up.
     pub wanted_mounted: tokio::sync::watch::Sender<bool>,
     pub verbose: bool,
-    /// Absolute path of the mount point.
+    /// Absolute path of the mount point as seen by clients (see `mountpoint.rs`).
     pub mountpoint: std::path::PathBuf,
+    /// Where the file system is really mounted.
+    pub mount_target: std::path::PathBuf,
     pending: Mutex<Option<Change>>,
     /// Serializes replays through the mount (see `replay.rs`).
     pub replay_lock: tokio::sync::Mutex<()>,
@@ -83,7 +85,7 @@ impl Drive {
         staging: Staging,
         pins: Pins,
         thumbnails: ThumbnailCache,
-        mountpoint: PathBuf,
+        mountpoint: crate::mountpoint::Mountpoint,
         verbose: bool,
     ) -> Self {
         Self {
@@ -103,7 +105,8 @@ impl Drive {
             mounted: AtomicBool::new(false),
             wanted_mounted: tokio::sync::watch::Sender::new(true),
             verbose,
-            mountpoint,
+            mountpoint: mountpoint.public,
+            mount_target: mountpoint.target,
             pending: Mutex::new(None),
             replay_lock: tokio::sync::Mutex::new(()),
             deferred: Mutex::new(Vec::new()),

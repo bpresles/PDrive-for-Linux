@@ -65,6 +65,7 @@ const INTROSPECTION: &str = r#"
       <arg name="paths" type="as" direction="in"/>
     </method>
     <property name="MountPoint" type="s" access="read"/>
+    <property name="MountTarget" type="s" access="read"/>
     <property name="State" type="s" access="read"/>
     <property name="Account" type="s" access="read"/>
     <property name="UsedSpace" type="t" access="read"/>
@@ -215,6 +216,7 @@ fn register_drive_interface(
         })
         .property(move |_, _, _, _, name| match name {
             "MountPoint" => property_drive.mountpoint.to_string_lossy().to_variant(),
+            "MountTarget" => property_drive.mount_target.to_string_lossy().to_variant(),
             _ => drive_properties(&property_drive).remove(name).unwrap_or_else(|| "".to_variant()),
         })
         .build()?;

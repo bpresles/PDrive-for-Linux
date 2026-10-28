@@ -45,9 +45,10 @@ pub struct ActivitySummary {
 }
 
 impl Drive {
-    /// Inode of an absolute path inside the mount, among the loaded entries.
+    /// Inode of an absolute path inside the mount, among the loaded entries; the path may be
+    /// under the public mount point or the real one (for a client that resolves links).
     pub fn ino_of_path(&self, path: &Path) -> Option<u64> {
-        let relative = path.strip_prefix(&self.mountpoint).ok()?;
+        let relative = path.strip_prefix(&self.mountpoint).or_else(|_| path.strip_prefix(&self.mount_target)).ok()?;
         self.tree().lookup_path(relative)
     }
 

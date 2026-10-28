@@ -34,7 +34,7 @@ pub async fn run(drive: &Arc<Drive>, change: Change, replay: Replay) -> bool {
         return false;
     }
     drive.set_pending(change);
-    let root = drive.mountpoint.clone();
+    let root = drive.mount_target.clone();
     let result = tokio::task::spawn_blocking(move || run_operation(&root, replay)).await;
 
     if let Ok(Err(e)) = &result {

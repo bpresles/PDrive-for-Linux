@@ -45,11 +45,42 @@ static guint signal_id;
 static guint mount_signal_id;
 /* "file:///…/ProtonDrive/" while the daemon runs, NULL otherwise. */
 static char *mount_uri_prefix;
+/* Same for the real mount folder, the mount point being a link to it. */
+static char *target_uri_prefix;
 
 static gboolean
 is_in_mount (const char *uri)
 {
-    return mount_uri_prefix != NULL && g_str_has_prefix (uri, mount_uri_prefix);
+    return (mount_uri_prefix != NULL && g_str_has_prefix (uri, mount_uri_prefix)) ||
+           (target_uri_prefix != NULL && g_str_has_prefix (uri, target_uri_prefix));
+}
+
+/* "file:///path/" for a folder path, NULL if it cannot be converted. */
+static char *
+folder_uri_prefix (const char *path)
+{
+    g_autofree char *uri = g_filename_to_uri (path, NULL, NULL);
+
+    return uri != NULL ? g_strconcat (uri, "/", NULL) : NULL;
+}
+
+static char *
+get_path_property (GDBusConnection *connection,
+                   const char      *name)
+{
+    g_autoptr (GVariant) reply = NULL;
+    g_autoptr (GVariant) value = NULL;
+
+    reply = g_dbus_connection_call_sync (connection, BUS_NAME, OBJECT_PATH,
+                                         "org.freedesktop.DBus.Properties", "Get",
+                                         g_variant_new ("(ss)", INTERFACE, name),
+                                         G_VARIANT_TYPE ("(v)"), G_DBUS_CALL_FLAGS_NONE,
+                                         CALL_TIMEOUT_MS, NULL, NULL);
+    if (reply == NULL)
+        return NULL;
+
+    g_variant_get (reply, "(v)", &value);
+    return folder_uri_prefix (g_variant_get_string (value, NULL));
 }
 
 /* Emblem names; Nautilus looks up the "emblem-<name>" icon. */
@@ -75,22 +106,10 @@ on_name_appeared (GDBusConnection *connection,
                   const char      *owner,
                   gpointer         user_data)
 {
-    g_autoptr (GVariant) reply = NULL;
-    g_autoptr (GVariant) value = NULL;
-    g_autofree char *uri = NULL;
-
-    reply = g_dbus_connection_call_sync (connection, BUS_NAME, OBJECT_PATH,
-                                         "org.freedesktop.DBus.Properties", "Get",
-                                         g_variant_new ("(ss)", INTERFACE, "MountPoint"),
-                                         G_VARIANT_TYPE ("(v)"), G_DBUS_CALL_FLAGS_NONE,
-                                         CALL_TIMEOUT_MS, NULL, NULL);
-    if (reply == NULL)
-        return;
-
-    g_variant_get (reply, "(v)", &value);
-    uri = g_filename_to_uri (g_variant_get_string (value, NULL), NULL, NULL);
     g_free (mount_uri_prefix);
-    mount_uri_prefix = uri != NULL ? g_strconcat (uri, "/", NULL) : NULL;
+    g_free (target_uri_prefix);
+    mount_uri_prefix = get_path_property (connection, "MountPoint");
+    target_uri_prefix = get_path_property (connection, "MountTarget");
 }
 
 static void
@@ -99,6 +118,7 @@ on_name_vanished (GDBusConnection *connection,
                   gpointer         user_data)
 {
     g_clear_pointer (&mount_uri_prefix, g_free);
+    g_clear_pointer (&target_uri_prefix, g_free);
 }
 
 /* The state of a file changed: make Nautilus query it again if it shows it. */
@@ -388,6 +408,7 @@ nautilus_module_shutdown (void)
         g_clear_object (&bus);
     }
     g_clear_pointer (&mount_uri_prefix, g_free);
+    g_clear_pointer (&target_uri_prefix, g_free);
 }
 
 G_MODULE_EXPORT void

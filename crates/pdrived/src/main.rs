@@ -18,6 +18,7 @@ mod content;
 mod dbus;
 mod drive;
 mod fs;
+mod mountpoint;
 mod pins;
 mod replay;
 mod status;
@@ -26,7 +27,7 @@ mod tree;
 mod watch;
 mod writes;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -39,6 +40,7 @@ use config::{Settings, APP_DIR};
 use content::ContentCache;
 use drive::Drive;
 use fs::DriveFs;
+use mountpoint::lazy_unmount;
 use pins::Pins;
 use thumbnails::ThumbnailCache;
 use writes::Staging;
@@ -62,7 +64,7 @@ async fn main() -> Result<()> {
     for dir in [&content_dir, &staging_dir] {
         std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
     }
-    let mountpoint = prepare_mountpoint(&mountpoint)?;
+    let mountpoint = mountpoint::resolve(&mountpoint)?;
 
     let (client, api) = pdcore::connect_with_api(verbose).await?;
     let root = client.my_files_folder().await?;
@@ -73,7 +75,7 @@ async fn main() -> Result<()> {
     let data_dir = config::xdg_dir("XDG_DATA_HOME", ".local/share")?.join(APP_DIR);
     std::fs::create_dir_all(&data_dir).with_context(|| format!("cannot create {}", data_dir.display()))?;
     let pins = Pins::load(data_dir.join("pinned.json"));
-    let drive = Arc::new(Drive::new(client, api, activity, root.uid, content, staging, pins, ThumbnailCache::new(&cache_home), mountpoint.clone(), verbose));
+    let drive = Arc::new(Drive::new(client, api, activity, root.uid, content, staging, pins, ThumbnailCache::new(&cache_home), mountpoint, verbose));
 
     dbus::start(drive.clone(), tokio::runtime::Handle::current());
     let background = [
@@ -99,11 +101,11 @@ async fn main() -> Result<()> {
     let mut terminate = signal(SignalKind::terminate())?;
     let mut wanted = drive.wanted_mounted.subscribe();
     let result = loop {
-        let mut session = mount(&drive, &mountpoint)?;
+        let mut session = mount(&drive)?;
         let mut unmounter = session.unmount_callable();
         // The session loop returns when the file system is unmounted, whoever unmounts it.
         let mut session_loop = tokio::task::spawn_blocking(move || session.run());
-        println!("Mounted on {}.", mountpoint.display());
+        println!("Mounted on {}.", drive.mount_target.display());
 
         let ejected = tokio::select! {
             _ = tokio::signal::ctrl_c() => None,
@@ -113,7 +115,7 @@ async fn main() -> Result<()> {
             _ = wanted.wait_for(|wanted| !*wanted) => {
                 if let Err(e) = unmounter.unmount() {
                     eprintln!("unmount failed ({e}): detaching the mount");
-                    lazy_unmount(&mountpoint);
+                    lazy_unmount(&drive.mount_target);
                 }
                 Some((&mut session_loop).await)
             }
@@ -139,7 +141,7 @@ async fn main() -> Result<()> {
                 if let Err(e) = unmounter.unmount() {
                     // Busy (e.g. open in a file manager): detach it now, it goes away once released.
                     eprintln!("unmount failed ({e}): detaching the mount");
-                    lazy_unmount(&mountpoint);
+                    lazy_unmount(&drive.mount_target);
                 }
                 break session_loop.await.map_err(anyhow::Error::from).and_then(|r| r.context("FUSE session failed"));
             }
@@ -152,37 +154,18 @@ async fn main() -> Result<()> {
     result
 }
 
-fn mount(drive: &Arc<Drive>, mountpoint: &Path) -> Result<fuser::Session<DriveFs>> {
-    let mountpoint = prepare_mountpoint(mountpoint)?;
+fn mount(drive: &Arc<Drive>) -> Result<fuser::Session<DriveFs>> {
+    let target = &drive.mount_target;
+    mountpoint::prepare_dir(target)?;
     let mut config = Config::default();
     config.mount_options = vec![
         MountOption::FSName("pdrive".into()),
         MountOption::Subtype("pdrive".into()),
         MountOption::NoAtime,
         MountOption::DefaultPermissions,
-        // Hidden from the file manager volumes: the sidebar entry is the CloudProviders account.
-        MountOption::CUSTOM("x-gvfs-hide".into()),
     ];
-    let session = fuser::Session::new(DriveFs::new(drive.clone(), tokio::runtime::Handle::current()), &mountpoint, &config)
-        .with_context(|| format!("cannot mount on {}", mountpoint.display()))?;
+    let session = fuser::Session::new(DriveFs::new(drive.clone(), tokio::runtime::Handle::current()), target, &config)
+        .with_context(|| format!("cannot mount on {}", target.display()))?;
     drive.set_session(Some(session.notifier()));
     Ok(session)
-}
-
-/// Creates the mount point if needed, and clears a dead mount left by a crashed run.
-fn prepare_mountpoint(path: &Path) -> Result<PathBuf> {
-    if std::fs::metadata(path).is_err_and(|e| e.raw_os_error() == Some(libc::ENOTCONN)) {
-        eprintln!("clearing a dead mount on {}", path.display());
-        lazy_unmount(path);
-    }
-    std::fs::create_dir_all(path).with_context(|| format!("cannot create {}", path.display()))?;
-    path.canonicalize().with_context(|| format!("cannot access {}", path.display()))
-}
-
-fn lazy_unmount(path: &Path) {
-    match std::process::Command::new("fusermount3").arg("-u").arg("-z").arg(path).status() {
-        Ok(status) if status.success() => {}
-        Ok(status) => eprintln!("fusermount3 -uz {} failed: {status}", path.display()),
-        Err(e) => eprintln!("cannot run fusermount3: {e}"),
-    }
 }
