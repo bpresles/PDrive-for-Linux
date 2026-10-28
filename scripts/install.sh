@@ -3,7 +3,7 @@
 #   ~/.local/lib/pdrive/                    native libraries (Proton Drive SDK and crypto)
 #   ~/.local/bin/pdrive-app, pdrived, pdrive  desktop application (tray icon, status window; it
 #                                           runs pdrived), mount daemon, command-line tool
-#   ~/.local/share/applications/io.github.pdrive.PDrive.App.desktop
+#   ~/.local/share/applications/io.github.bpresles.PDrive.App.desktop
 #   ~/.local/share/icons/hicolor/scalable/   application and tray icons, sync state emblems
 #                                           for Nautilus
 #   ~/.local/share/locale/<lang>/LC_MESSAGES/pdrive.mo   translations (po/), found by the programs
@@ -48,6 +48,8 @@ if [[ -f "$UNIT_DIR/$UNIT" ]]; then
 fi
 
 ICON_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
+# Migrate from the former application id (io.github.pdrive.PDrive.App).
+rm -f "$APP_DIR/io.github.pdrive.PDrive.App.desktop" "$ICON_ROOT/scalable/apps/io.github.pdrive.PDrive.App.svg"
 (cd "$ROOT/packaging/icons/hicolor" && find . -name '*.svg' -print0 | while IFS= read -r -d '' icon; do
     install -Dm 0644 "$icon" "$ICON_ROOT/$icon"
 done)
@@ -62,7 +64,7 @@ while read -r lang; do
 done < "$ROOT/po/LINGUAS"
 
 # The Exec line gets the absolute path: ~/.local/bin is not always in the PATH of the menus.
-sed "s|^Exec=pdrive-app|Exec=$BIN_DIR/pdrive-app|" "$ROOT/packaging/io.github.pdrive.PDrive.App.desktop" > "$APP_DIR/io.github.pdrive.PDrive.App.desktop"
+sed "s|^Exec=pdrive-app|Exec=$BIN_DIR/pdrive-app|" "$ROOT/packaging/io.github.bpresles.PDrive.App.desktop" > "$APP_DIR/io.github.bpresles.PDrive.App.desktop"
 update-desktop-database -q "$APP_DIR" 2>/dev/null || true
 
 if [[ -n "${LEGACY_REMOVED:-}" || -n "${SERVICE_REMOVED:-}" ]]; then

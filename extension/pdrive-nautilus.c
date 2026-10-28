@@ -4,7 +4,7 @@
  * Shows the sync state of the files of the PDrive mount as emblems, adds "Keep Available
  * Offline" and "Free Up Space" to their context menu, and reloads the windows when the drive is
  * mounted. All the work is done by the pdrived
- * daemon, queried over D-Bus (io.github.pdrive.PDrive1): this extension runs inside Nautilus
+ * daemon, queried over D-Bus (io.github.bpresles.PDrive1): this extension runs inside Nautilus
  * and is kept minimal, asynchronous and passive when the daemon is not running.
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -23,9 +23,9 @@
 #include <gtk/gtk.h>
 #include <nautilus-extension.h>
 
-#define BUS_NAME "io.github.pdrive.PDrive"
-#define OBJECT_PATH "/io/github/pdrive/PDrive"
-#define INTERFACE "io.github.pdrive.PDrive1"
+#define BUS_NAME "io.github.bpresles.PDrive"
+#define OBJECT_PATH "/io/github/bpresles/PDrive"
+#define INTERFACE "io.github.bpresles.PDrive1"
 #define CALL_TIMEOUT_MS 2000
 
 typedef struct

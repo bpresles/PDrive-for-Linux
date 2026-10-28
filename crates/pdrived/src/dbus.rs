@@ -1,13 +1,13 @@
 //! D-Bus service on the session bus, run on its own thread with a GLib main loop.
 //!
-//! - `io.github.pdrive.PDrive1` at `/io/github/pdrive/PDrive`: per-file state and offline
+//! - `io.github.bpresles.PDrive1` at `/io/github/bpresles/PDrive`: per-file state and offline
 //!   actions, used by the Nautilus extension (`extension/`) and by the status window of
 //!   `pdrive-app`: properties `State` (`syncing`, `idle`, `unmounted`, `error`), `Account`
 //!   (address), `UsedSpace` and `MaxSpace` (bytes) with `PropertiesChanged`, `GetRecentActivity`
 //!   (`a(sstxs)`: path, kind, size, timestamp, state), `Mount` / `Unmount`, signal `ActivityChanged`.
-//! - The CloudProviders protocol at `/io/github/pdrive/PDrive/CloudProviders`, which makes the
+//! - The CloudProviders protocol at `/io/github/bpresles/PDrive/CloudProviders`, which makes the
 //!   account appear in the sidebar of Nautilus and of the GTK file chooser, with its sync state
-//!   and a menu. libcloudproviders finds it through `cloud-providers/io.github.pdrive.PDrive.ini`
+//!   and a menu. libcloudproviders finds it through `cloud-providers/io.github.bpresles.PDrive.ini`
 //!   in a system data directory (see `scripts/install-system.sh`).
 
 use std::collections::HashMap;
@@ -21,13 +21,13 @@ use pdi18n::{tr, tr_fmt, tr_n};
 
 use crate::drive::Drive;
 
-pub const BUS_NAME: &str = "io.github.pdrive.PDrive";
-const OBJECT_PATH: &str = "/io/github/pdrive/PDrive";
-const INTERFACE: &str = "io.github.pdrive.PDrive1";
+pub const BUS_NAME: &str = "io.github.bpresles.PDrive";
+const OBJECT_PATH: &str = "/io/github/bpresles/PDrive";
+const INTERFACE: &str = "io.github.bpresles.PDrive1";
 
-const CLOUD_PROVIDERS_PATH: &str = "/io/github/pdrive/PDrive/CloudProviders";
-const PROVIDER_PATH: &str = "/io/github/pdrive/PDrive/CloudProviders/Provider";
-const ACCOUNT_PATH: &str = "/io/github/pdrive/PDrive/CloudProviders/Account";
+const CLOUD_PROVIDERS_PATH: &str = "/io/github/bpresles/PDrive/CloudProviders";
+const PROVIDER_PATH: &str = "/io/github/bpresles/PDrive/CloudProviders/Provider";
+const ACCOUNT_PATH: &str = "/io/github/bpresles/PDrive/CloudProviders/Account";
 const PROVIDER_INTERFACE: &str = "org.freedesktop.CloudProviders.Provider";
 const ACCOUNT_INTERFACE: &str = "org.freedesktop.CloudProviders.Account";
 const OBJECT_MANAGER_INTERFACE: &str = "org.freedesktop.DBus.ObjectManager";
@@ -36,8 +36,8 @@ const OBJECT_MANAGER_INTERFACE: &str = "org.freedesktop.DBus.ObjectManager";
 const PROVIDER_NAME: &str = "PDrive";
 const ACCOUNT_NAME: &str = "Proton Drive";
 /// The application of `pdrive-app` (a `GApplication`).
-const APP_BUS_NAME: &str = "io.github.pdrive.PDrive.App";
-const APP_OBJECT_PATH: &str = "/io/github/pdrive/PDrive/App";
+const APP_BUS_NAME: &str = "io.github.bpresles.PDrive.App";
+const APP_OBJECT_PATH: &str = "/io/github/bpresles/PDrive/App";
 const APP_BINARY: &str = "pdrive-app";
 const WEB_URL: &str = "https://drive.proton.me";
 const ACTIVITY_POLL_INTERVAL: Duration = Duration::from_millis(500);
@@ -48,7 +48,7 @@ const STATUS_SYNCING: i32 = 2;
 
 const INTROSPECTION: &str = r#"
 <node>
-  <interface name="io.github.pdrive.PDrive1">
+  <interface name="io.github.bpresles.PDrive1">
     <method name="GetFileStatus">
       <arg name="path" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>

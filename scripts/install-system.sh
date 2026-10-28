@@ -12,7 +12,9 @@ LOCALEDIR=/usr/local/share/locale
 
 make -C "$ROOT/extension" LOCALEDIR="$LOCALEDIR"
 sudo make -C "$ROOT/extension" LOCALEDIR="$LOCALEDIR" install
-sudo install -Dm0644 "$ROOT/packaging/io.github.pdrive.PDrive.ini" "$CLOUD_PROVIDERS_DIR/io.github.pdrive.PDrive.ini"
+# Migrate from the former D-Bus name (io.github.pdrive.PDrive).
+sudo rm -f "$CLOUD_PROVIDERS_DIR/io.github.pdrive.PDrive.ini"
+sudo install -Dm0644 "$ROOT/packaging/io.github.bpresles.PDrive.ini" "$CLOUD_PROVIDERS_DIR/io.github.bpresles.PDrive.ini"
 
 while read -r lang; do
     [[ -z "$lang" || "$lang" == \#* ]] && continue

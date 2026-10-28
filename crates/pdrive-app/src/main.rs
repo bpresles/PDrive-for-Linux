@@ -2,7 +2,7 @@
 //!
 //!     pdrive-app [--background]
 //!
-//! Single instance (`io.github.pdrive.PDrive.App`) that stays alive without a window:
+//! Single instance (`io.github.bpresles.PDrive.App`) that stays alive without a window:
 //! it runs and supervises `pdrived`, shows the tray icon (StatusNotifierItem) and the status
 //! window, and offers the settings. Starting it again shows the status window; with
 //! `--background` (autostart) no window is opened. Only "Quit" in the tray menu (or SIGTERM)
@@ -76,6 +76,7 @@ fn main() -> glib::ExitCode {
     logs::init();
     let terminate = terminate_signals();
     pdi18n::init();
+    config::migrate_legacy_autostart();
     let app = adw::Application::builder().application_id(APP_ID).flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE).build();
     let state: Rc<OnceCell<Rc<App>>> = Rc::new(OnceCell::new());
 

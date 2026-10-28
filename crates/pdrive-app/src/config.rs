@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use toml_edit::{DocumentMut, Value};
 
-pub const APP_ID: &str = "io.github.pdrive.PDrive.App";
+pub const APP_ID: &str = "io.github.bpresles.PDrive.App";
 
 pub struct Settings {
     pub mountpoint: String,
@@ -94,6 +94,25 @@ pub fn expand_home(path: &str) -> PathBuf {
 
 fn autostart_path() -> PathBuf {
     config_home().join("autostart").join(format!("{APP_ID}.desktop"))
+}
+
+/// Application id before the definitive D-Bus identifier; only used by the migration below.
+const LEGACY_APP_ID: &str = "io.github.pdrive.PDrive.App";
+
+/// Renames an autostart entry made under the former application id, so that the automatic
+/// start stays enabled. The `Icon` line is rewritten with the new id. Does nothing when
+/// the new entry already exists.
+pub fn migrate_legacy_autostart() {
+    let legacy = config_home().join("autostart").join(format!("{LEGACY_APP_ID}.desktop"));
+    let Ok(text) = std::fs::read_to_string(&legacy) else { return };
+    let path = autostart_path();
+    if !path.exists()
+        && let Err(e) = std::fs::write(&path, text.replace(LEGACY_APP_ID, APP_ID))
+    {
+        eprintln!("cannot migrate the autostart entry to {}: {e}", path.display());
+        return;
+    }
+    let _ = std::fs::remove_file(&legacy);
 }
 
 pub fn autostart_enabled() -> bool {

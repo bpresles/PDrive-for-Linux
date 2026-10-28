@@ -1,4 +1,4 @@
-//! Client of the D-Bus interface of `pdrived` (`io.github.pdrive.PDrive1`).
+//! Client of the D-Bus interface of `pdrived` (`io.github.bpresles.PDrive1`).
 
 use std::rc::Rc;
 
@@ -6,9 +6,9 @@ use gtk::gio;
 use gtk::glib;
 use gtk::prelude::*;
 
-pub const BUS_NAME: &str = "io.github.pdrive.PDrive";
-const OBJECT_PATH: &str = "/io/github/pdrive/PDrive";
-const INTERFACE: &str = "io.github.pdrive.PDrive1";
+pub const BUS_NAME: &str = "io.github.bpresles.PDrive";
+const OBJECT_PATH: &str = "/io/github/bpresles/PDrive";
+const INTERFACE: &str = "io.github.bpresles.PDrive1";
 
 #[derive(Clone, Default)]
 pub struct Snapshot {
