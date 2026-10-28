@@ -1,0 +1,321 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR the PDrive for Linux authors
+# This file is distributed under the same license as the pdrive package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: pdrive\n"
+"Report-Msgid-Bugs-To: https://github.com/bpresles/PDrive-for-Linux/issues\n"
+"POT-Creation-Date: 2026-10-28 22:21+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: crates/pdrive-app/src/main.rs:396
+msgid "Sign-in failed"
+msgstr ""
+
+#: crates/pdrive-app/src/main.rs:396
+msgid "The sign-in did not complete. Try again."
+msgstr ""
+
+#: crates/pdrive-app/src/main.rs:410
+msgid "Sign-out failed"
+msgstr ""
+
+#: crates/pdrive-app/src/main.rs:410
+msgid "The session could not be removed. See the logs of the application."
+msgstr ""
+
+#: crates/pdrive-app/src/main.rs:423
+msgid "Start PDrive when you log in?"
+msgstr ""
+
+#: crates/pdrive-app/src/main.rs:423
+msgid ""
+"The Proton Drive folder is then mounted automatically. You can change this "
+"in the settings."
+msgstr ""
+
+#: crates/pdrive-app/src/main.rs:424
+msgid "Not now"
+msgstr ""
+
+#: crates/pdrive-app/src/main.rs:424
+msgid "Start at login"
+msgstr ""
+
+#: crates/pdrive-app/src/main.rs:439
+msgid "OK"
+msgstr ""
+
+#: crates/pdrive-app/src/settings.rs:14 crates/pdrive-app/src/tray.rs:100
+#: crates/pdrive-app/src/window.rs:69
+msgid "Settings"
+msgstr ""
+
+#: crates/pdrive-app/src/settings.rs:17
+msgid "Changes apply when the dialog is closed, restarting the service."
+msgstr ""
+
+#: crates/pdrive-app/src/settings.rs:17
+msgid "Synchronization"
+msgstr ""
+
+#: crates/pdrive-app/src/settings.rs:18
+msgid "Mount point"
+msgstr ""
+
+#: crates/pdrive-app/src/settings.rs:20
+msgid "Cache size (GiB)"
+msgstr ""
+
+#: crates/pdrive-app/src/settings.rs:28
+msgid "Start when I log in"
+msgstr ""
+
+#: crates/pdrive-app/src/settings.rs:32 crates/pdrive-app/src/settings.rs:40
+msgid "Cannot change the startup setting"
+msgstr ""
+
+#: crates/pdrive-app/src/settings.rs:36
+msgid "Show the status window at startup"
+msgstr ""
+
+#: crates/pdrive-app/src/settings.rs:46
+msgid "Account"
+msgstr ""
+
+#: crates/pdrive-app/src/settings.rs:48 crates/pdrive-app/src/settings.rs:53
+msgid "Sign out"
+msgstr ""
+
+#: crates/pdrive-app/src/settings.rs:52
+msgid "Sign out?"
+msgstr ""
+
+#: crates/pdrive-app/src/settings.rs:52
+msgid ""
+"The service is stopped and the session is removed from this computer. "
+"Pending uploads are resumed after the next sign-in."
+msgstr ""
+
+#: crates/pdrive-app/src/settings.rs:53
+msgid "Cancel"
+msgstr ""
+
+#: crates/pdrive-app/src/tray.rs:94 crates/pdrive-app/src/window.rs:197
+#: crates/pdrived/src/dbus.rs:383
+msgid "Mount"
+msgstr ""
+
+#: crates/pdrive-app/src/tray.rs:94 crates/pdrive-app/src/window.rs:201
+#: crates/pdrived/src/dbus.rs:381
+msgid "Unmount"
+msgstr ""
+
+#: crates/pdrive-app/src/tray.rs:96 crates/pdrive-app/src/window.rs:104
+msgid "Open folder"
+msgstr ""
+
+#: crates/pdrive-app/src/tray.rs:97
+msgid "Show status window"
+msgstr ""
+
+#: crates/pdrive-app/src/tray.rs:102
+msgid "Quit"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:29
+msgid "Not signed in"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:30
+msgid "Starting…"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:31
+msgid "Service not running"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:32
+msgid "Not mounted"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:33
+msgid "Syncing…"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:34 crates/pdrived/src/dbus.rs:273
+msgid "Up to date"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:35
+msgid "Error: an upload failed"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:66
+msgid ""
+"No notification area found. On GNOME, enable the “AppIndicator and "
+"KStatusNotifierItem Support” extension to get the PDrive icon."
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:74 crates/pdrive-app/src/window.rs:186
+msgid "Sign in"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:79
+msgid "Sign in to Proton Drive"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:80
+msgid "Unofficial third-party application, not affiliated with Proton AG."
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:99
+msgid "No recent activity"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:106
+msgid "View online"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:186
+msgid "Waiting for the browser…"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:231
+#, rust-format
+msgid "{} used of {}"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:263
+msgid "Uploading…"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:264
+msgid "Upload failed"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:265
+msgid "Uploaded"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:266
+msgid "Downloading…"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:267
+msgid "Download failed"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:268
+msgid "Downloaded"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:269
+msgid "Renamed"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:270
+msgid "Moved"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:271
+msgid "Moved to trash"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:272
+msgid "Added online"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:273
+msgid "Renamed online"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:274
+msgid "Updated online"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:275
+msgid "Removed online"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:283
+msgid "Just now"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:284
+#, rust-format
+msgid "{} minute ago"
+msgid_plural "{} minutes ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#: crates/pdrive-app/src/window.rs:285
+#, rust-format
+msgid "{} hour ago"
+msgid_plural "{} hours ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#: crates/pdrive-app/src/window.rs:286
+#, rust-format
+msgid "{} day ago"
+msgid_plural "{} days ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#: crates/pdrived/src/dbus.rs:257
+#, rust-format
+msgid "{} (unofficial client) · {}"
+msgstr ""
+
+#: crates/pdrived/src/dbus.rs:262
+msgid "Not mounted: use Mount in the menu"
+msgstr ""
+
+#: crates/pdrived/src/dbus.rs:267
+#, rust-format
+msgid "{} file to upload"
+msgid_plural "{} files to upload"
+msgstr[0] ""
+msgstr[1] ""
+
+#: crates/pdrived/src/dbus.rs:270
+#, rust-format
+msgid "{} file downloading"
+msgid_plural "{} files downloading"
+msgstr[0] ""
+msgstr[1] ""
+
+#: crates/pdrived/src/dbus.rs:329
+msgid "Show status"
+msgstr ""
+
+#: crates/pdrived/src/dbus.rs:330
+msgid "Open in the browser"
+msgstr ""
+
+#: extension/pdrive-nautilus.c:332
+msgid "Keep Available Offline"
+msgstr ""
+
+#: extension/pdrive-nautilus.c:333
+msgid "Download and keep available without network"
+msgstr ""
+
+#: extension/pdrive-nautilus.c:335
+msgid "Free Up Space"
+msgstr ""
+
+#: extension/pdrive-nautilus.c:336
+msgid "Remove the downloaded copy, keeping it in the cloud"
+msgstr ""

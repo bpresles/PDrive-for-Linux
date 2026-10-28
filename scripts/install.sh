@@ -6,6 +6,8 @@
 #   ~/.local/share/applications/io.github.pdrive.PDrive.App.desktop
 #   ~/.local/share/icons/hicolor/scalable/   application and tray icons, sync state emblems
 #                                           for Nautilus
+#   ~/.local/share/locale/<lang>/LC_MESSAGES/pdrive.mo   translations (po/), found by the programs
+#                                           through the prefix of their executable
 # It also removes the systemd user service of earlier versions (pdrive.service).
 # The Nautilus extension and the sidebar declaration are installed by install-system.sh (sudo).
 set -euo pipefail
@@ -50,6 +52,14 @@ ICON_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
     install -Dm 0644 "$icon" "$ICON_ROOT/$icon"
 done)
 gtk-update-icon-cache -q -t "$ICON_ROOT" 2>/dev/null || true
+
+# Translations: one catalogue per language of po/LINGUAS.
+LOCALE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/locale"
+while read -r lang; do
+    [[ -z "$lang" || "$lang" == \#* ]] && continue
+    mkdir -p "$LOCALE_ROOT/$lang/LC_MESSAGES"
+    msgfmt --check -o "$LOCALE_ROOT/$lang/LC_MESSAGES/pdrive.mo" "$ROOT/po/$lang.po"
+done < "$ROOT/po/LINGUAS"
 
 # The Exec line gets the absolute path: ~/.local/bin is not always in the PATH of the menus.
 sed "s|^Exec=pdrive-app|Exec=$BIN_DIR/pdrive-app|" "$ROOT/packaging/io.github.pdrive.PDrive.App.desktop" > "$APP_DIR/io.github.pdrive.PDrive.App.desktop"

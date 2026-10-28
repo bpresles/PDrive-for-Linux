@@ -47,6 +47,7 @@ const CACHE_PURGE_INTERVAL: Duration = Duration::from_secs(10 * 60);
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    pdi18n::init();
     config::migrate_legacy_dirs()?;
     let settings = Settings::load()?;
     let mountpoint = match std::env::args_os().nth(1) {

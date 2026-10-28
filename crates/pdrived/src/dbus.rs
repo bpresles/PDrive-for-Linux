@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use gio::prelude::*;
 use glib::variant::{ObjectPath, ToVariant, Variant};
+use pdi18n::{tr, tr_fmt, tr_n};
 
 use crate::drive::Drive;
 
@@ -251,23 +252,23 @@ fn watch_properties(connection: &gio::DBusConnection, drive: &Arc<Drive>) {
 /// Sync state of the account for the sidebar; the tooltip tells it is a third-party client.
 fn account_status(drive: &Drive) -> (i32, String) {
     let (status, details) = activity_status(drive);
-    (status, format!("{PROVIDER_NAME} (unofficial client) · {details}"))
+    (status, tr_fmt("{} (unofficial client) · {}", &[PROVIDER_NAME, &details]))
 }
 
 fn activity_status(drive: &Drive) -> (i32, String) {
     if !drive.mounted.load(std::sync::atomic::Ordering::SeqCst) {
-        return (STATUS_IDLE, "Not mounted: use Mount in the menu".to_owned());
+        return (STATUS_IDLE, tr("Not mounted: use Mount in the menu"));
     }
     let activity = drive.activity();
     let mut details = Vec::new();
     if activity.uploads > 0 {
-        details.push(format!("{} file(s) to upload", activity.uploads));
+        details.push(tr_n("{} file to upload", "{} files to upload", activity.uploads as u32, &[&activity.uploads.to_string()]));
     }
     if activity.downloads > 0 {
-        details.push(format!("{} file(s) downloading", activity.downloads));
+        details.push(tr_n("{} file downloading", "{} files downloading", activity.downloads as u32, &[&activity.downloads.to_string()]));
     }
     if details.is_empty() {
-        (STATUS_IDLE, "Up to date".to_owned())
+        (STATUS_IDLE, tr("Up to date"))
     } else {
         (STATUS_SYNCING, details.join(", "))
     }
@@ -323,8 +324,8 @@ fn register_cloud_providers(
     // follow the enabled state of remote actions, but they read the menu model each time.
     let mut menu_mounted = drive.mounted.load(std::sync::atomic::Ordering::SeqCst);
     menu.append_item(&mount_menu_item(menu_mounted));
-    menu.append(Some("Show status"), Some("cloudprovider.show-status"));
-    menu.append(Some("Open in the browser"), Some("cloudprovider.open-web"));
+    menu.append(Some(&tr("Show status")), Some("cloudprovider.show-status"));
+    menu.append(Some(&tr("Open in the browser")), Some("cloudprovider.open-web"));
     let actions = gio::SimpleActionGroup::new();
     let mount = gio::SimpleAction::new("mount", None);
     let mount_drive = drive.clone();
@@ -375,9 +376,9 @@ fn register_cloud_providers(
 
 fn mount_menu_item(mounted: bool) -> gio::MenuItem {
     if mounted {
-        gio::MenuItem::new(Some("Unmount"), Some("cloudprovider.unmount"))
+        gio::MenuItem::new(Some(&tr("Unmount")), Some("cloudprovider.unmount"))
     } else {
-        gio::MenuItem::new(Some("Mount"), Some("cloudprovider.mount"))
+        gio::MenuItem::new(Some(&tr("Mount")), Some("cloudprovider.mount"))
     }
 }
 

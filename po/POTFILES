@@ -1,0 +1,6 @@
+crates/pdrive-app/src/main.rs
+crates/pdrive-app/src/settings.rs
+crates/pdrive-app/src/tray.rs
+crates/pdrive-app/src/window.rs
+crates/pdrived/src/dbus.rs
+extension/pdrive-nautilus.c

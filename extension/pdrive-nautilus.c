@@ -10,6 +10,14 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+/* Translations: domain "pdrive", catalogues in LOCALEDIR (set by the Makefile). _() is
+ * dgettext (GETTEXT_PACKAGE, ...), which keeps the domain of Nautilus untouched. */
+#define GETTEXT_PACKAGE "pdrive"
+#ifndef LOCALEDIR
+#define LOCALEDIR "/usr/share/locale"
+#endif
+
+#include <glib/gi18n-lib.h>
 #include <gio/gio.h>
 #include <gmodule.h>
 #include <gtk/gtk.h>
@@ -301,11 +309,11 @@ get_file_items (NautilusMenuProvider *provider,
             return NULL;
     }
 
-    items = g_list_append (items, new_menu_item ("PDrive::keep_offline", "Keep Available Offline",
-                                                 "Download and keep available without network",
+    items = g_list_append (items, new_menu_item ("PDrive::keep_offline", _("Keep Available Offline"),
+                                                 _("Download and keep available without network"),
                                                  "KeepOffline", files));
-    items = g_list_append (items, new_menu_item ("PDrive::free_up_space", "Free Up Space",
-                                                 "Remove the downloaded copy, keeping it in the cloud",
+    items = g_list_append (items, new_menu_item ("PDrive::free_up_space", _("Free Up Space"),
+                                                 _("Remove the downloaded copy, keeping it in the cloud"),
                                                  "FreeUpSpace", files));
     return items;
 }
@@ -349,6 +357,9 @@ pdrive_provider_class_finalize (PDriveProviderClass *klass)
 G_MODULE_EXPORT void
 nautilus_module_initialize (GTypeModule *module)
 {
+    bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
+    bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+
     pdrive_provider_register_type (module);
     provider_types[0] = pdrive_provider_get_type ();
 

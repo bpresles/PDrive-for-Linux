@@ -2,7 +2,9 @@
 Type=Application
 Name=PDrive
 GenericName=Proton Drive client
+GenericName[fr]=Client Proton Drive
 Comment=Unofficial third-party client for Proton Drive, not affiliated with Proton AG
+Comment[fr]=Client tiers non officiel de Proton Drive, non affilié à Proton AG
 Exec=pdrive-app
 Icon=io.github.pdrive.PDrive.App
 Terminal=false
