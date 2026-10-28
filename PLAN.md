@@ -44,7 +44,7 @@ Dépôt : https://github.com/bpresles/PDrive-for-Linux (privé jusqu'à la fin d
 - [ ] Mise en forme du code : le dépôt n'a jamais été formaté avec `cargo fmt`. Faire une passe de formatage, dans un commit à part, avant d'activer `cargo fmt --check` en CI.
 - [ ] Tests en CI : ajouter à `.github/workflows/ci.yml` le job Rust décrit dans la section « Tests automatisés » (dépendances système, bibliothèques natives dans `native/linux-x64/`, clippy `-D warnings`, `cargo test`).
 - [ ] Reporter le nouvel identifiant `io.github.bpresles.PDrive` dans `debian/`, `packaging/rpm/`, `.github/` et `packaging/README.md`, une fois les paquets RPM/DEB terminés.
-- [ ] Tester le passage au nouvel identifiant après installation : quitter l'app, `install.sh`, `install-system.sh`, `nautilus -q`, relancer ; vérifier une seule entrée dans la barre latérale et un seul `pdrived`.
+- [x] Tester le passage au nouvel identifiant après installation : quitter l'app, `install.sh`, `install-system.sh`, `nautilus -q`, relancer ; vérifier une seule entrée dans la barre latérale et un seul `pdrived`.
 
 ### README
 
