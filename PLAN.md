@@ -43,7 +43,10 @@ Dépôt : https://github.com/bpresles/PDrive-for-Linux (privé jusqu'à la fin d
 - [ ] Inventaire des licences des dépendances NuGet du SDK et des crates de `dotnet-crypto`, à compléter dans `THIRD_PARTY_NOTICES` (mentions « TO COMPLETE »).
 - [ ] Mise en forme du code : le dépôt n'a jamais été formaté avec `cargo fmt`. Faire une passe de formatage, dans un commit à part, avant d'activer `cargo fmt --check` en CI.
 - [ ] Tests en CI : ajouter à `.github/workflows/ci.yml` le job Rust décrit dans la section « Tests automatisés » (dépendances système, bibliothèques natives dans `native/linux-x64/`, clippy `-D warnings`, `cargo test`).
-- [ ] Reporter le nouvel identifiant `io.github.bpresles.PDrive` dans `debian/`, `packaging/rpm/`, `.github/` et `packaging/README.md`, une fois les paquets RPM/DEB terminés.
+- [x] Reporter le nouvel identifiant `io.github.bpresles.PDrive` dans `debian/`, `packaging/rpm/`, `.github/` et `packaging/README.md` (les seules mentions de l'ancien nom avertissent de l'ancien `.ini` de `/usr/local`).
+- [ ] Simplifier les paquets : variable `PDSDK_RPATH` dans les `build.rs` (rpath distinct du dossier de lien, pour se passer de `patchelf`), et dans `extension/Makefile` `$(LDFLAGS)` à l'édition de liens et `install -Dm0755` (contournés aujourd'hui dans le spec et `debian/rules`).
+- [ ] Pages de manuel pour `pdrive`, `pdrived` et `pdrive-app` (seuls avertissements de rpmlint et lintian).
+- [ ] Vérifier que le fournisseur Secret Service de KDE (`kf6-kwallet`, `kwallet6`) implémente bien l'API Secret Service, sinon revoir les dépendances des paquets.
 - [x] Tester le passage au nouvel identifiant après installation : quitter l'app, `install.sh`, `install-system.sh`, `nautilus -q`, relancer ; vérifier une seule entrée dans la barre latérale et un seul `pdrived`.
 
 ### README
@@ -87,8 +90,10 @@ Dépôt : https://github.com/bpresles/PDrive-for-Linux (privé jusqu'à la fin d
 
 ### Paquets RPM et DEB, workflow de release
 
-- [ ] Étape de compilation des bibliothèques natives reproductible en CI : .NET 10 et NativeAOT, Rust, versions figées du SDK et de `dotnet-crypto`, comme dans `build-native.sh`.
-- [ ] Installation système plutôt que dans `~/.local` :
+Stratégie retenue : les bibliothèques natives sont précompilées une seule fois (CI ou `build-native.sh`, versions figées), publiées en archive avec leur somme SHA-256 (`scripts/package-native.sh`) et embarquées telles quelles dans les paquets (Source1 du SRPM, entrée du build DEB) ; les crates Rust sont vendorisées dans l'archive source (`scripts/make-source-tarball.sh`). Les paquets se construisent donc sans .NET ni réseau, mais ne visent pas les dépôts officiels Fedora ou Debian. Détails et limites : `packaging/README.md`.
+
+- [ ] Étape de compilation des bibliothèques natives reproductible en CI : .NET 10 et NativeAOT, Rust, versions figées du SDK et de `dotnet-crypto`, comme dans `build-native.sh`. Job `native` écrit dans `release.yml`, non exécuté (pas de .NET en local) ; `package-native.sh` vérifié.
+- [x] Installation système plutôt que dans `~/.local` (vérifiée sur le contenu des paquets RPM et DEB construits en conteneur) :
   - `/usr/bin/pdrive`, `/usr/bin/pdrived` ;
   - bibliothèques dans `/usr/lib64/pdrive/` (Fedora) ou `/usr/lib/<triplet>/pdrive/` (Debian), avec rpath correspondant ;
   - extension dans le dossier des extensions Nautilus ;
@@ -96,10 +101,11 @@ Dépôt : https://github.com/bpresles/PDrive-for-Linux (privé jusqu'à la fin d
   - icônes dans `/usr/share/icons/hicolor/` ;
   - `/usr/bin/pdrive-app` et son `.desktop` dans `/usr/share/applications/` (plus d'unité systemd, voir partie 2) ;
   - catalogues de traduction dans `/usr/share/locale/<langue>/LC_MESSAGES/pdrive.mo`.
-- [ ] RPM : fichier `.spec`, publication via COPR.
-- [ ] DEB : `debian/` ou `cargo-deb`, avec dépendances `fuse3`, `libnautilus-extension4`, `gnome-keyring` ou fournisseur Secret Service.
-- [ ] Workflow GitHub Actions déclenché par un tag `v*` : compilation, paquets, sommes de contrôle, release GitHub.
-- [ ] Version unique propagée partout : `Cargo.toml`, `x-pm-appversion`, paquets.
+- [x] RPM : `packaging/rpm/pdrive-for-linux.spec`, construit en conteneur Fedora 44 (`scripts/build-packages.sh rpm`), rpmlint sans erreur.
+- [ ] RPM : publication via COPR. À faire : créer le projet COPR, renseigner la variable `COPR_PROJECT` et le secret `COPR_CONFIG` (job `copr` de `release.yml`, envoi du SRPM), tester une première construction ; auditer les licences des crates vendorisées et des paquets NuGet embarqués (`THIRD_PARTY_NOTICES`).
+- [x] DEB : `debian/` (debhelper 13), construit en conteneur Debian 13 (rustc par rustup, les dépendances exigent Rust 1.92), lintian sans erreur. Non testé : installation sur Debian/Ubuntu, Ubuntu 24.04 (libadwaita 1.5 trop ancienne).
+- [ ] Workflow GitHub Actions déclenché par un tag `v*` (`.github/workflows/release.yml`) : écrit, jamais exécuté. À faire : un premier tag de test sur un dépôt d'essai, vérification du job `native`.
+- [ ] Version unique propagée partout : `scripts/check-version.sh` vérifie `Cargo.toml`, le spec, `debian/changelog` et le tag (utilisé par le workflow). Reste `x-pm-appversion`.
 
 ## 2. Compléter les fonctions
 
