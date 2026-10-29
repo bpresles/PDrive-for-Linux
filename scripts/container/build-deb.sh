@@ -5,7 +5,7 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y --no-install-recommends build-essential debhelper dpkg-dev fakeroot patchelf gettext \
+apt-get install -y --no-install-recommends build-essential debhelper dpkg-dev fakeroot gettext \
     desktop-file-utils pkg-config libnautilus-extension-dev libgtk-4-dev libadwaita-1-dev libglib2.0-dev \
     xz-utils lintian ca-certificates curl cargo rustc
 DPKG_FLAGS=()

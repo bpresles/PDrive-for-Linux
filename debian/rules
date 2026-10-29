@@ -13,6 +13,8 @@ LIBDIR   := /usr/lib/$(DEB_HOST_MULTIARCH)/pdrive
 EXTDIR   := $(shell pkg-config --variable=extensiondir libnautilus-extension-4)
 export CARGO_HOME := $(CURDIR)/debian/cargo-home
 export PDSDK_LIB_DIR := $(CURDIR)/native/linux-x64
+# Run-time location (rpath, and where the SDK loads libproton_crypto.so from).
+export PDSDK_RUNTIME_LIB_DIR := $(LIBDIR)
 export RUSTFLAGS := -C link-arg=-Wl,-z,relro -C link-arg=-Wl,-z,now
 
 %:
@@ -27,7 +29,6 @@ override_dh_auto_configure:
 
 override_dh_auto_build:
 	cargo build --release --frozen --offline -p pdrived -p pdrive -p pdrive-app
-	patchelf --set-rpath $(LIBDIR) target/release/pdrive target/release/pdrived
 	CFLAGS="$(CFLAGS) $(CPPFLAGS)" $(MAKE) -C extension LOCALEDIR=/usr/share/locale CC="$(CC) $(LDFLAGS)"
 	while read -r lang; do \
 	  case "$$lang" in ''|\#*) continue;; esac; \
@@ -37,6 +38,11 @@ override_dh_auto_build:
 
 override_dh_auto_test:
 	desktop-file-validate packaging/$(APP_ID).desktop
+	# The binaries must not refer to the build tree (the SDK loads libproton_crypto.so from that path).
+	for b in pdrive pdrived; do \
+	  ! grep -q "$(CURDIR)/native" target/release/$$b || { echo "$$b refers to the build tree" >&2; exit 1; }; \
+	  grep -q "$(LIBDIR)" target/release/$$b; \
+	done
 
 override_dh_auto_install:
 	install -Dpm0755 target/release/pdrive target/release/pdrived target/release/pdrive-app -t debian/$(PKG)/usr/bin

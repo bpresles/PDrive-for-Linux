@@ -62,7 +62,8 @@ pub fn set_crypto_library_dir(dir: &std::path::Path) {
     unsafe { override_native_library_name(ByteArray::new(b"proton_crypto"), ByteArray::new(path.as_bytes())) };
 }
 
-/// Directory the bindings were linked against (development builds).
+/// Directory of the native libraries at run time (`PDSDK_RUNTIME_LIB_DIR` at build time, otherwise
+/// the directory the bindings were linked against).
 pub const DEFAULT_LIB_DIR: &str = env!("PDSDK_DEFAULT_LIB_DIR");
 
 // --- Errors -----------------------------------------------------------------------------------

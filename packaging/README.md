@@ -1,7 +1,7 @@
 # Packaging (RPM, DEB)
 
 Layout of the packages: `/usr/bin/{pdrive,pdrived,pdrive-app}`, private libraries in
-`/usr/lib64/pdrive` (Fedora) or `/usr/lib/<triplet>/pdrive` (Debian, rpath set with patchelf),
+`/usr/lib64/pdrive` (Fedora) or `/usr/lib/<triplet>/pdrive` (Debian, rpath set at build time with `PDSDK_RUNTIME_LIB_DIR`),
 the Nautilus extension in the Nautilus extensions directory, `.ini` in
 `/usr/share/cloud-providers`, icons, `.desktop`, `.mo` in `/usr/share/locale`.
 

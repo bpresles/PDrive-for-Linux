@@ -35,7 +35,7 @@ BuildRequires:  gcc
 BuildRequires:  make
 BuildRequires:  cargo >= 1.92
 BuildRequires:  rust >= 1.92
-BuildRequires:  patchelf
+BuildRequires:  binutils
 BuildRequires:  gettext
 BuildRequires:  desktop-file-utils
 BuildRequires:  pkgconfig(libnautilus-extension-4)
@@ -76,10 +76,10 @@ test "$cargo_version" = "%{version}" || { echo "Cargo.toml version $cargo_versio
 
 %build
 export PDSDK_LIB_DIR="$PWD/native/linux-x64"
+# Run-time location (rpath, and where the SDK loads libproton_crypto.so from).
+export PDSDK_RUNTIME_LIB_DIR=%{_libdir}/pdrive
 export RUSTFLAGS="%{build_rustflags}"
 cargo build --release --frozen --offline -p pdrived -p pdrive -p pdrive-app
-# build.rs sets the rpath to the build directory (PDSDK_LIB_DIR): point it to the install dir.
-patchelf --set-rpath %{_libdir}/pdrive target/release/pdrive target/release/pdrived
 
 # Nautilus extension. Environment CFLAGS are appended to the Makefile ones; the linker flags
 # go through CC because the Makefile has no LDFLAGS.
@@ -114,9 +114,12 @@ grep -q '^BusName=' %{buildroot}%{_datadir}/cloud-providers/%{cloud_ini}
 # The extension must carry the system locale directory, not /usr/local.
 ! grep -q /usr/local %{buildroot}%{_libdir}/nautilus/extensions-4/libpdrive-nautilus.so
 # The binaries must find the private libraries through the installed rpath only.
+# and must not refer to the build tree (the SDK loads libproton_crypto.so from that path).
 for b in pdrive pdrived; do
-    rpath=$(patchelf --print-rpath %{buildroot}%{_bindir}/$b)
+    rpath=$(readelf -d %{buildroot}%{_bindir}/$b | sed -n 's/.*R\(UN\)\?PATH.*\[\(.*\)\]/\2/p')
     test "$rpath" = "%{_libdir}/pdrive" || { echo "unexpected rpath for $b: $rpath" >&2; exit 1; }
+    ! grep -q "$PWD/native" %{buildroot}%{_bindir}/$b || { echo "$b refers to the build tree" >&2; exit 1; }
+    grep -q "%{_libdir}/pdrive" %{buildroot}%{_bindir}/$b
 done
 
 %post
