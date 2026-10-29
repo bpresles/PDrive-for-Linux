@@ -216,7 +216,10 @@ The roadmap is in `PLAN.md` (in French).
 
 ## Uninstall
 
-Quit PDrive from the tray menu first (it unmounts the drive), then:
+`scripts/uninstall.sh` removes what `install.sh` and `install-system.sh` installed (asking for
+sudo for the system files), after stopping PDrive; it keeps your session, settings and cache, and
+the files of an RPM or DEB package. The equivalent by hand, after quitting PDrive from the tray
+menu (it unmounts the drive):
 
 ```sh
 # User files
