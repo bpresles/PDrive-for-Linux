@@ -29,7 +29,7 @@ override_dh_auto_configure:
 
 override_dh_auto_build:
 	cargo build --release --frozen --offline -p pdrived -p pdrive -p pdrive-app
-	CFLAGS="$(CFLAGS) $(CPPFLAGS)" $(MAKE) -C extension LOCALEDIR=/usr/share/locale CC="$(CC) $(LDFLAGS)"
+	CFLAGS="$(CFLAGS) $(CPPFLAGS)" $(MAKE) -C extension LOCALEDIR=/usr/share/locale
 	while read -r lang; do \
 	  case "$$lang" in ''|\#*) continue;; esac; \
 	  mkdir -p debian/locale/$$lang/LC_MESSAGES; \

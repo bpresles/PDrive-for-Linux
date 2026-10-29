@@ -83,18 +83,15 @@ export PDSDK_RUNTIME_LIB_DIR=%{_libdir}/pdrive
 export RUSTFLAGS="%{build_rustflags}"
 cargo build --release --frozen --offline -p pdrived -p pdrive -p pdrive-app
 
-# Nautilus extension. Environment CFLAGS are appended to the Makefile ones; the linker flags
-# go through CC because the Makefile has no LDFLAGS.
+# Nautilus extension. Environment CFLAGS are appended to the Makefile ones, LDFLAGS are used at link time.
 %set_build_flags
-make -C extension LOCALEDIR=%{_datadir}/locale CC="%{__cc} $LDFLAGS"
+make -C extension LOCALEDIR=%{_datadir}/locale
 
 %install
 install -Dpm0755 target/release/pdrive target/release/pdrived target/release/pdrive-app -t %{buildroot}%{_bindir}
 install -Dpm0755 native/linux-x64/libproton_drive_sdk.so native/linux-x64/libproton_crypto.so -t %{buildroot}%{_libdir}/pdrive
 
 make -C extension install DESTDIR=%{buildroot} LOCALEDIR=%{_datadir}/locale EXTENSION_DIR=%{_libdir}/nautilus/extensions-4
-# The Makefile installs it 0644: executable bit needed for stripping and debuginfo.
-chmod 0755 %{buildroot}%{_libdir}/nautilus/extensions-4/libpdrive-nautilus.so
 
 install -Dpm0644 packaging/%{cloud_ini} %{buildroot}%{_datadir}/cloud-providers/%{cloud_ini}
 desktop-file-install --dir=%{buildroot}%{_datadir}/applications packaging/%{app_id}.desktop

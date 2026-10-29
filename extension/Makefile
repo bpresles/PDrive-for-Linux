@@ -12,10 +12,10 @@ EXTENSION_DIR ?= $(shell pkg-config --variable=extensiondir libnautilus-extensio
 TARGET := libpdrive-nautilus.so
 
 $(TARGET): pdrive-nautilus.c
-	$(CC) $(CFLAGS) -shared -Wl,--no-undefined -o $@ $< $(LDLIBS)
+	$(CC) $(CFLAGS) -shared -Wl,--no-undefined $(LDFLAGS) -o $@ $< $(LDLIBS)
 
 install: $(TARGET)
-	install -Dm0644 $(TARGET) $(DESTDIR)$(EXTENSION_DIR)/$(TARGET)
+	install -Dm0755 $(TARGET) $(DESTDIR)$(EXTENSION_DIR)/$(TARGET)
 
 clean:
 	rm -f $(TARGET)
