@@ -48,7 +48,7 @@ Dépôt : https://github.com/bpresles/PDrive-for-Linux (privé jusqu'à la fin d
 - [x] Simplifier les paquets (29/10/2026) : `extension/Makefile` utilise `$(LDFLAGS)` et `install -Dm0755` ; contournements retirés du spec (`CC=... $LDFLAGS`, `chmod`) et de `debian/rules`. Vérifié sur l'édition de liens locale (LDFLAGS présent dans la commande) et le mode 755 installé ; reconstruction des paquets au point « Reconstruire ».
 - [ ] Reconstruire et tester le paquet DEB avec cette correction.
 - [ ] Pages de manuel pour `pdrive`, `pdrived` et `pdrive-app` (seuls avertissements de rpmlint et lintian).
-- [ ] Vérifier que le fournisseur Secret Service de KDE (`kf6-kwallet`, `kwallet6`) implémente bien l'API Secret Service, sinon revoir les dépendances des paquets.
+- [x] Secret Service sous KDE (29/10/2026) : KWallet gère l'API depuis KDE Frameworks 5.97 (annonce « Introduce Secret Service API »), en option dans `kwalletd` ; depuis KF 6.14, `ksecretd` (le code de l'ancien kwalletd) l'expose par défaut et `kwalletd` ne fait plus que proxifier l'API KWallet (README du dépôt KDE `kwallet`). Vérifié sur les paquets : `kf6-kwallet` 6.31 (Fedora 44) contient `ksecretd` et `org.kde.secretservicecompat.service` ; `kwallet6` 6.13.0 (Debian 13) n'a pas `ksecretd`, mais `kwalletd6` contient les chaînes `org.freedesktop.secrets` et `apiEnabled` (option à activer). Dépendances inchangées (`kf6-kwallet`, `kwallet6` conviennent) ; note ajoutée au README pour Debian 13. Non testé en session KDE réelle.
 - [x] Tester le passage au nouvel identifiant après installation : quitter l'app, `install.sh`, `install-system.sh`, `nautilus -q`, relancer ; vérifier une seule entrée dans la barre latérale et un seul `pdrived`.
 
 ### README

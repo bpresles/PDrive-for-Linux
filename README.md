@@ -120,7 +120,11 @@ flowchart LR
 - FUSE 3 (`fusermount3`).
 - Development files of GTK 4, libadwaita and GLib, for `pdrive-app`.
 - `gettext` (`msgfmt`) for the translations.
-- A Secret Service provider (for example GNOME Keyring or KWallet).
+- A Secret Service provider (for example GNOME Keyring, KeePassXC or KWallet). With KWallet,
+  the Secret Service interface (`org.freedesktop.secrets`) is provided by `ksecretd` from
+  KDE Frameworks 6.14 (Fedora 44 has 6.31). Debian 13 has `kwallet6` 6.13, whose `kwalletd6`
+  only offers it as an option: enable it in the KDE Wallet settings ("Use KWallet for the
+  Secret Service interface") or use another provider.
 - For the Nautilus extension: the development files of `libnautilus-extension-4`
   (`nautilus-devel` on Fedora) and GTK 4.
 - On GNOME: the AppIndicator extension, for the tray icon (see above).
