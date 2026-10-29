@@ -5,6 +5,7 @@
 #   ~/.local/lib/pdrive/                    native libraries (Proton Drive SDK and crypto)
 #   ~/.local/bin/pdrive-app, pdrived, pdrive  desktop application (tray icon, status window; it
 #                                           runs pdrived), mount daemon, command-line tool
+#   ~/.local/share/man/man1/pdrive*.1       manual pages (found by man through ~/.local/bin)
 #   ~/.local/share/applications/io.github.bpresles.PDrive.App.desktop
 #   ~/.local/share/icons/hicolor/scalable/   application and tray icons, sync state emblems
 #                                           for Nautilus
@@ -64,6 +65,11 @@ while read -r lang; do
     mkdir -p "$LOCALE_ROOT/$lang/LC_MESSAGES"
     msgfmt --check -o "$LOCALE_ROOT/$lang/LC_MESSAGES/pdrive.mo" "$ROOT/po/$lang.po"
 done < "$ROOT/po/LINGUAS"
+
+# Manual pages: man finds ~/.local/share/man for a ~/.local/bin in the PATH.
+MAN_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/man/man1"
+install -d "$MAN_DIR"
+install -m 0644 "$ROOT"/packaging/man/*.1 "$MAN_DIR/"
 
 # The Exec line gets the absolute path: ~/.local/bin is not always in the PATH of the menus.
 sed "s|^Exec=pdrive-app|Exec=$BIN_DIR/pdrive-app|" "$ROOT/packaging/io.github.bpresles.PDrive.App.desktop" > "$APP_DIR/io.github.bpresles.PDrive.App.desktop"

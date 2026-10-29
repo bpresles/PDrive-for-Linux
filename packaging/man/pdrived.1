@@ -1,0 +1,76 @@
+.\" SPDX-License-Identifier: GPL-3.0-or-later
+.\" Copyright (C) 2026 Bertrand Presles
+.TH PDRIVED 1 "October 2026" "PDrive for Linux" "User Commands"
+.SH NAME
+pdrived \- daemon that mounts Proton Drive with FUSE
+.SH SYNOPSIS
+.B pdrived
+.RI [ MOUNTPOINT ]
+.SH DESCRIPTION
+.B pdrived
+mounts
+.I My files
+of a Proton Drive account as a FUSE file system. Folders are listed on demand,
+files are downloaded and decrypted when first opened and can be read while
+downloading, and remote changes are applied from Drive events. Writes are
+staged locally and uploaded when the file is closed; uploads interrupted by a
+stop are resumed at the next start. It exposes its state, the quota and the
+recent activity on the D-Bus session bus (name
+.BR io.github.bpresles.PDrive ).
+.PP
+The daemon is normally started and supervised by
+.BR pdrive-app (1).
+Run it by hand for debugging, after
+.BR "pdrive login" .
+.PP
+PDrive for Linux is an unofficial third-party client. It is not affiliated with,
+or endorsed by, Proton AG.
+.SH OPTIONS
+.TP
+.I MOUNTPOINT
+Where to make the drive appear. The default is the
+.B mountpoint
+setting. The real mount is in a hidden folder of
+.IR ~/.local/share/pdrive ,
+and
+.I MOUNTPOINT
+(by default
+.IR ~/ProtonDrive )
+is a symbolic link to it, so that the file manager shows a single entry.
+.SH STOPPING
+Stop with Ctrl+C or
+.BR SIGTERM :
+the drive is unmounted. If the mount is ejected (for example from the file
+manager or with
+.BR "fusermount3 \-u" ),
+the daemon waits for a new mount request. FUSE mounting uses
+.BR fusermount3 .
+.SH ENVIRONMENT
+.TP
+.B PDRIVE_VERBOSE
+When set, log HTTP requests and SDK debug messages.
+.SH FILES
+.TP
+.I ~/.config/pdrive/config.toml
+Optional settings (under
+.B $XDG_CONFIG_HOME
+if set). Keys:
+.BR mountpoint " (default " ~/ProtonDrive ),
+.BR cache_size_gib " (default 10) and"
+.BR show_window_at_startup " (default true, read by " pdrive-app ).
+Unknown keys are rejected.
+.TP
+.I ~/.cache/pdrive/
+Content cache and pending uploads.
+.TP
+.I ~/.local/share/pdrive/
+Hidden mount and list of files kept available offline (pinned.json).
+.SH SEE ALSO
+.BR pdrive (1),
+.BR pdrive-app (1),
+.BR fusermount3 (1)
+.PP
+https://github.com/bpresles/PDrive\-for\-Linux
+.SH AUTHOR
+Bertrand Presles. Licensed under the GNU General Public License, version 3 or
+later.

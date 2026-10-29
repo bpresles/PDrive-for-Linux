@@ -1,0 +1,57 @@
+.\" SPDX-License-Identifier: GPL-3.0-or-later
+.\" Copyright (C) 2026 Bertrand Presles
+.TH PDRIVE-APP 1 "October 2026" "PDrive for Linux" "User Commands"
+.SH NAME
+pdrive-app \- desktop application of PDrive for Linux (tray icon, status window)
+.SH SYNOPSIS
+.B pdrive-app
+.RB [ \-\-background ]
+.SH DESCRIPTION
+.B pdrive-app
+is the desktop application of PDrive for Linux, an unofficial Proton Drive
+client. It runs and supervises
+.BR pdrived (1)
+(restarting it with an increasing delay if it fails), shows an icon in the
+notification area (StatusNotifierItem) and a status window with the account,
+used space, recent activity and settings, and lets you sign in and out.
+.PP
+Only one instance runs: starting the application again shows the status window.
+Closing the window does not quit the application; use
+.B Quit
+in the tray menu, or send
+.BR SIGTERM .
+The daemon is then stopped cleanly and the drive unmounted.
+.PP
+On GNOME, the tray icon needs the
+.I AppIndicator and KStatusNotifierItem Support
+extension. PDrive for Linux is not affiliated with, or endorsed by, Proton AG.
+.SH OPTIONS
+.TP
+.B \-\-background
+Start without opening the status window. Used by the autostart entry, which
+the settings window creates in
+.IR ~/.config/autostart .
+.SH ENVIRONMENT
+.TP
+.B PDRIVE_VERBOSE
+When set, the daemon logs HTTP requests and SDK debug messages.
+.SH FILES
+.TP
+.I ~/.config/pdrive/config.toml
+Settings, edited by the settings window (see
+.BR pdrived (1)).
+.TP
+.I $XDG_STATE_HOME/pdrive/pdrive.log
+Log used when there is no systemd journal (default
+.IR ~/.local/state/pdrive/pdrive.log ).
+Otherwise, when not started from a terminal, the log of the application and of
+the daemon goes to the journal:
+.B journalctl \-\-user \-t pdrive
+.SH SEE ALSO
+.BR pdrive (1),
+.BR pdrived (1)
+.PP
+https://github.com/bpresles/PDrive\-for\-Linux
+.SH AUTHOR
+Bertrand Presles. Licensed under the GNU General Public License, version 3 or
+later.

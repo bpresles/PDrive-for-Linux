@@ -1,0 +1,69 @@
+.\" SPDX-License-Identifier: GPL-3.0-or-later
+.\" Copyright (C) 2026 Bertrand Presles
+.TH PDRIVE 1 "October 2026" "PDrive for Linux" "User Commands"
+.SH NAME
+pdrive \- command-line tool of PDrive for Linux, an unofficial Proton Drive client
+.SH SYNOPSIS
+.B pdrive
+.BR login " | " logout " | " status " | " selftest
+.br
+.B pdrive ls
+.RI [ PATH ]
+.SH DESCRIPTION
+.B pdrive
+signs in to and out of a Proton account and lists folders of
+.IR "My files" .
+The drive itself is mounted by
+.BR pdrived (1),
+usually run by
+.BR pdrive-app (1).
+.PP
+PDrive for Linux is an unofficial third-party client. It is not affiliated with,
+or endorsed by, Proton AG.
+.SH COMMANDS
+.TP
+.B login
+Sign in through the web browser and store the session in the Secret Service
+keyring (GNOME Keyring, KWallet or KeePassXC).
+.TP
+.BI "ls [" PATH ]
+List a folder of
+.I My files
+(for example
+.BR "pdrive ls Documents/Invoices" ).
+Without
+.IR PATH ,
+list the root.
+.TP
+.B logout
+Revoke the session and remove it from the keyring.
+.TP
+.B status
+Print
+.B signed in
+or
+.BR "not signed in" .
+.TP
+.B selftest
+Check the bridge with the SDK library without network access.
+.SH EXIT STATUS
+.B status
+exits with 0 if a session is stored, 1 otherwise. Any command exits with 2 when
+the arguments are not understood, and with a non-zero status on failure.
+.SH ENVIRONMENT
+.TP
+.B PDRIVE_VERBOSE
+When set, log HTTP requests and SDK debug messages.
+.SH FILES
+.TP
+.I ~/.config/pdrive/config.toml
+Settings (see
+.BR pdrived (1)).
+.SH SEE ALSO
+.BR pdrive-app (1),
+.BR pdrived (1)
+.PP
+https://github.com/bpresles/PDrive\-for\-Linux
+.SH AUTHOR
+Bertrand Presles. Licensed under the GNU General Public License, version 3 or
+later.

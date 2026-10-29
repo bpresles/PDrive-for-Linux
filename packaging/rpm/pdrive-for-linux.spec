@@ -93,6 +93,7 @@ install -Dpm0755 native/linux-x64/libproton_drive_sdk.so native/linux-x64/libpro
 
 make -C extension install DESTDIR=%{buildroot} LOCALEDIR=%{_datadir}/locale EXTENSION_DIR=%{_libdir}/nautilus/extensions-4
 
+install -Dpm0644 packaging/man/*.1 -t %{buildroot}%{_mandir}/man1
 install -Dpm0644 packaging/%{cloud_ini} %{buildroot}%{_datadir}/cloud-providers/%{cloud_ini}
 desktop-file-install --dir=%{buildroot}%{_datadir}/applications packaging/%{app_id}.desktop
 (cd packaging/icons/hicolor && find . -name '*.svg' -print0 | while IFS= read -r -d '' icon; do
@@ -142,6 +143,9 @@ done
 %{_bindir}/pdrive
 %{_bindir}/pdrived
 %{_bindir}/pdrive-app
+%{_mandir}/man1/pdrive.1*
+%{_mandir}/man1/pdrived.1*
+%{_mandir}/man1/pdrive-app.1*
 %dir %{_libdir}/pdrive
 %{_libdir}/pdrive/libproton_drive_sdk.so
 %{_libdir}/pdrive/libproton_crypto.so

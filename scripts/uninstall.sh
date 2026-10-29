@@ -65,6 +65,7 @@ if [[ -d "$ICON_ROOT" ]]; then
     gtk-update-icon-cache -q -t "$ICON_ROOT" 2>/dev/null || true
 fi
 rm -f "$DATA_HOME"/locale/*/LC_MESSAGES/pdrive.mo
+rm -f "$DATA_HOME"/man/man1/{pdrive,pdrived,pdrive-app}.1
 update-desktop-database -q "$DATA_HOME/applications" 2>/dev/null || true
 
 # System installation (install-system.sh): the Nautilus extension, unless a package owns it.

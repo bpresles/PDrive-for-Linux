@@ -229,6 +229,7 @@ rm -f ~/.local/share/applications/io.github.bpresles.PDrive.App.desktop
 rm -f ~/.config/autostart/io.github.bpresles.PDrive.App.desktop
 find ~/.local/share/icons/hicolor -name 'io.github.bpresles.PDrive.App.svg' -o -name 'emblem-pdrive-*.svg' -o -name 'pdrive-*.svg' | xargs -r rm -f
 rm -f ~/.local/share/locale/*/LC_MESSAGES/pdrive.mo
+rm -f ~/.local/share/man/man1/{pdrive,pdrived,pdrive-app}.1
 
 # System files
 sudo rm -f "$(pkg-config --variable=extensiondir libnautilus-extension-4)/libpdrive-nautilus.so"
