@@ -15,8 +15,9 @@ Status: early alpha (the application identifies itself to Proton with the `-alph
 |---|---|---|
 | ![Nautilus with the state emblems and the Proton Drive sidebar entry](docs/screenshots/Nautilus.png) | ![Status window of pdrive-app](docs/screenshots/StatusWindow.png) | ![Settings of pdrive-app](docs/screenshots/Settings.png) |
 
-<!-- TODO(author): docs/screenshots/context-menu.png - "Keep Available Offline" / "Free Up Space" -->
-<!-- TODO(author): docs/screenshots/tray-menu.png - the tray icon and its menu -->
+| File context menu | Sidebar entry menu | Tray icon menu |
+|---|---|---|
+| ![Nautilus file context menu with "Keep Available Offline" and "Free Up Space"](docs/screenshots/FileContextMenu.png) | ![Context menu of the Proton Drive sidebar entry in Nautilus](docs/screenshots/ContextMenu.png) | ![Menu of the pdrive-app tray icon](docs/screenshots/Menu.png) |
 
 ## Features
 

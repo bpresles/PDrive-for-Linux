@@ -39,7 +39,7 @@ Dépôt : https://github.com/bpresles/PDrive-for-Linux (privé jusqu'à la fin d
 
 ### Reste à faire (bilan du 28/10/2026)
 
-- [ ] Captures d'écran pour le README dans `docs/screenshots/` : emblèmes, menu contextuel, barre latérale, fenêtre de statut, icône de notification (marqueurs TODO dans `README.md`).
+- [x] Captures d'écran pour le README dans `docs/screenshots/` (29/10/2026) : Nautilus (emblèmes, barre latérale), fenêtre de statut, réglages, menu contextuel d'un fichier, menu de l'entrée de la barre latérale, menu du tray.
 - [x] Inventaire des licences (29/10/2026) : `scripts/audit-licenses.sh` (cargo-about, `project.assets.json` et `.nuspec`) génère `licenses/rust-pdrive.tsv`, `rust-proton-crypto.tsv` et `nuget-sdk.tsv` ; `THIRD_PARTY_NOTICES`, le tag `License:` du spec et `debian/copyright` complétés. Aucune licence incompatible avec la GPL-3.0 dans ce qui est lié. À noter : bzip2-1.0.6 (libbz2-rs-sys, permissive), notices tierces du runtime .NET désormais livrées dans l'archive native (`package-native.sh`), SonarAnalyzer (licence source-available, outil de compilation non distribué). Reste : livrer avec les paquets le recueil des textes de licence des crates (`scripts/audit-licenses.sh --texts <fichier>`, non branché dans `make-source-tarball.sh`) et la relecture humaine.
 - [x] Mise en forme du code (29/10/2026) : `cargo fmt --all` fait dans un commit à part, avec `rustfmt.toml` (`max_width = 160`, `use_small_heuristics = "Max"` : environ 70 modifications au lieu de 450 avec les valeurs par défaut) ; `cargo fmt --check` est actif en CI.
 - [x] Tests en CI (28-29/10/2026) : `.github/workflows/ci.yml` a maintenant un job `native` (bibliothèques natives, `actions/cache` indexé sur `native-ubuntu-24.04-dotnet10-<révisions figées>`, artefact `native-ci`) et un job `rust` (conteneur Debian 13, rustup stable, `cargo fmt --check`, `clippy -D warnings`, `cargo test --workspace`, test du pont `--ignored`). Conteneur Debian 13 et non le runner : `pdrive-app` exige libadwaita >= 1.6 (feature `v1_6`) et Ubuntu 24.04 n'a que la 1.5. Vérifié : syntaxe (`actionlint` 1.7.12, sans erreur) et les commandes du job `rust` exécutées telles quelles dans un conteneur `debian:trixie` (Rust 1.99.1, paquets apt `ca-certificates curl git build-essential pkg-config libglib2.0-dev libgtk-4-dev libadwaita-1-dev` suffisants). Non vérifié : l'exécution sur GitHub (job `native` et cache jamais lancés, pas de .NET en local).
@@ -54,7 +54,7 @@ Dépôt : https://github.com/bpresles/PDrive-for-Linux (privé jusqu'à la fin d
 ### README
 
 - [x] Présentation, avec la mention bien visible « client tiers non officiel, non affilié à Proton AG ».
-- [x] Fonctionnalités rédigées (README.md). Reste à faire : fournir les captures d'écran dans `docs/screenshots/` (marqueurs TODO dans le README : emblèmes, menu contextuel, barre latérale, fenêtre de statut, icône de notification).
+- [x] Fonctionnalités rédigées (README.md). Captures d'écran fournies dans `docs/screenshots/`.
 - [x] Installation :
   - prérequis : Fedora/Debian, FUSE 3, .NET 10 SDK pour compiler le SDK, `nautilus-devel` pour l'extension ;
   - `install.sh`, `install-system.sh` ;
