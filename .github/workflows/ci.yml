@@ -1,7 +1,6 @@
 # Pull requests and branch pushes: formatting, lints, tests, Nautilus extension.
-# Minimal for now: Nautilus extension build, desktop file, catalogues, version consistency.
-# Left for later: cargo fmt/clippy/test, which need libproton_drive_sdk.so to link (fetch the
-# native archive of a release into native/linux-x64) and a decision on rustfmt/clippy baselines.
+# Jobs: Nautilus extension and packaging checks; native libraries (.NET NativeAOT + Rust, cached
+# on the revisions pinned in scripts/build-native.sh); Rust formatting, lints and tests.
 name: ci
 on:
   pull_request:
@@ -19,3 +18,65 @@ jobs:
       - run: desktop-file-validate packaging/io.github.bpresles.PDrive.App.desktop
       - run: for f in po/*.po; do msgfmt --check -o /dev/null "$f"; done
       - run: scripts/check-version.sh
+
+  # The two native libraries the Rust crates link against. A cache hit (same pinned revisions,
+  # runner image and .NET major version) skips the .NET build, which takes several minutes.
+  native:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: id
+        run: |
+          source scripts/lib-version.sh
+          echo "native_id=$NATIVE_ID" >> "$GITHUB_OUTPUT"
+      - id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: native/linux-x64
+          key: native-ubuntu-24.04-dotnet10-${{ steps.id.outputs.native_id }}
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Build native libraries
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends clang zlib1g-dev
+          rustup toolchain install stable --profile minimal
+          rustup target add x86_64-unknown-linux-gnu
+          scripts/build-native.sh
+      - run: ls -l native/linux-x64 && test -f native/linux-x64/libproton_drive_sdk.so && test -f native/linux-x64/libproton_crypto.so
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-ci
+          path: native/linux-x64/*.so
+          retention-days: 1
+          if-no-files-found: error
+
+  # Debian 13 container rather than the ubuntu-24.04 runner: pdrive-app needs libadwaita >= 1.6
+  # (feature v1_6) and Ubuntu 24.04 has 1.5. Debian 13 is also the target of the DEB package.
+  # Its rustc (1.85) is older than the 1.92 required by the dependencies (gtk4-rs, oo7): rustup.
+  rust:
+    needs: native
+    runs-on: ubuntu-24.04
+    container: docker.io/library/debian:trixie
+    steps:
+      - run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config \
+            libglib2.0-dev libgtk-4-dev libadwaita-1-dev
+      - name: Rust toolchain (stable, >= 1.92)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable -c clippy -c rustfmt
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: native-ci
+          path: native/linux-x64
+      - run: rustc --version && cargo --version
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: SDK bridge test (fake host, no network)
+        run: cargo test -p pdsdk --test bridge -- --ignored
