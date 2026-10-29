@@ -148,7 +148,8 @@ in release mode and installs, under your home directory:
 - `~/.local/bin/`: `pdrive-app`, `pdrived`, `pdrive`;
 - `~/.local/share/applications/io.github.bpresles.PDrive.App.desktop`: the menu entry;
 - `~/.local/share/icons/hicolor/`: application, tray and emblem icons;
-- `~/.local/share/locale/<lang>/LC_MESSAGES/pdrive.mo`: translations.
+- `~/.local/share/locale/<lang>/LC_MESSAGES/pdrive.mo`: translations;
+- `~/.local/share/man/man1/`: manual pages `pdrive(1)`, `pdrived(1)` and `pdrive-app(1)`.
 
 `~/.local/bin` must be in your `PATH` to run the commands from a terminal. `scripts/install-system.sh`
 builds the Nautilus extension and installs it in the extension directory of Nautilus, the

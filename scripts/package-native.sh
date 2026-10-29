@@ -31,8 +31,8 @@ mkdir -p "$D" "$ROOT/dist"
 install -m0755 "$SRC/libproton_drive_sdk.so" "$SRC/libproton_crypto.so" "$D/"
 cp "$ROOT/third_party/sdk/LICENSE.md" "$D/LICENSE-proton-sdk.md"
 cp "$ROOT/third_party/dotnet-crypto/LICENSE.txt" "$D/LICENSE-proton-dotnet-crypto.txt"
-cp "${RUNTIME_PACK}LICENSE.TXT" "$D/LICENSE-dotnet-runtime.txt"
-cp "${RUNTIME_PACK}THIRD-PARTY-NOTICES.TXT" "$D/LICENSE-dotnet-runtime-third-party-notices.txt"
+install -m0644 "${RUNTIME_PACK}LICENSE.TXT" "$D/LICENSE-dotnet-runtime.txt"
+install -m0644 "${RUNTIME_PACK}THIRD-PARTY-NOTICES.TXT" "$D/LICENSE-dotnet-runtime-third-party-notices.txt"
 cat > "$D/SOURCES.txt" <<EOT
 Prebuilt by scripts/build-native.sh (NativeAOT, .NET SDK from the build environment).
 libproton_drive_sdk.so  https://github.com/ProtonDriveApps/sdk.git          $SDK_REV
