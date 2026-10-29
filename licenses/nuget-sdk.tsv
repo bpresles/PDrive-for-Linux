@@ -1,0 +1,37 @@
+package	version	licence (nuspec)	copyright (nuspec)	role
+CommunityToolkit.HighPerformance	8.4.2	MIT	(c) .NET Foundation and Contributors. All rights reserved.	linked
+Google.Protobuf	3.35.1	BSD-3-Clause	Copyright 2015, Google Inc.	linked
+Grpc.Tools	2.84.0	Apache-2.0	Copyright 2018 The gRPC Authors	build
+Microsoft.AspNetCore.App.Runtime.linux-x64	10.0.14	MIT	© Microsoft Corporation. All rights reserved.	build
+Microsoft.Data.Sqlite.Core	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.DotNet.ILCompiler	10.0.14	MIT	© Microsoft Corporation. All rights reserved.	build
+Microsoft.Extensions.Configuration.Abstractions	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.Extensions.Configuration.Binder	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.Extensions.Configuration	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.Extensions.DependencyInjection.Abstractions	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.Extensions.DependencyInjection	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.Extensions.Diagnostics.Abstractions	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.Extensions.Diagnostics	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.Extensions.Http	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.Extensions.Logging.Abstractions	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.Extensions.Logging	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.Extensions.Options.ConfigurationExtensions	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.Extensions.Options	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.Extensions.Primitives	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.IO.RecyclableMemoryStream	3.0.1	MIT	© Microsoft Corporation. All rights reserved.	linked
+Microsoft.NET.ILLink.Tasks	10.0.14	MIT	© Microsoft Corporation. All rights reserved.	build
+Microsoft.NETCore.App.Runtime.NativeAOT.linux-x64	10.0.14	MIT	© Microsoft Corporation. All rights reserved.	linked
+Polly.Core	8.8.0	BSD-3-Clause	Copyright (c) 2015-2026, App vNext	linked
+Polly	8.8.0	BSD-3-Clause	Copyright (c) 2015-2026, App vNext	linked
+Proton.Cryptography	0.40.1	(none in nuspec)		linked
+Roslynator.Analyzers	4.16.1	Apache-2.0	Copyright (c) 2016-2023 Josef Pihrt	build
+Roslynator.Formatting.Analyzers	4.16.1	Apache-2.0	Copyright (c) 2016-2023 Josef Pihrt	build
+SQLite	3.54.0	file LICENSE.txt: SQLite is Public Domain	Copyright 2014-2026 SourceGear, LLC	linked
+SQLitePCLRaw.config.e_sqlite3	3.0.5	Apache-2.0	Copyright 2014-2026 SourceGear, LLC	linked
+SQLitePCLRaw.core	3.0.5	Apache-2.0	Copyright 2014-2025 SourceGear, LLC	linked
+SQLitePCLRaw.provider.e_sqlite3	3.0.5	Apache-2.0	Copyright 2014-2025 SourceGear, LLC	linked
+SonarAnalyzer.CSharp	10.35.0.4138	file licenses/LICENSE.txt: SONAR Source-Available License v1.0	Copyright © SonarSource Sàrl	build
+StyleCop.Analyzers.Unstable	1.2.0.556	MIT	Copyright 2015 Tunnel Vision Laboratories, LLC	build
+StyleCop.Analyzers	1.2.0-beta.556	MIT	Copyright 2015 Tunnel Vision Laboratories, LLC	build
+System.Numerics.Tensors	10.0.13	MIT	© Microsoft Corporation. All rights reserved.	linked
+runtime.linux-x64.Microsoft.DotNet.ILCompiler	10.0.14	MIT	© Microsoft Corporation. All rights reserved.	build

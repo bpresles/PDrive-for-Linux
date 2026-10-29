@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Bertrand Presles
+# cargo-about configuration used by scripts/audit-licenses.sh: the licences accepted for crates
+# linked into PDrive for Linux (GPL-3.0-or-later). Anything else makes the audit fail and must be
+# reviewed by a human. `accepted` lists permissive licences and, for crates with alternatives
+# ("MIT OR Apache-2.0"), at least one accepted alternative is enough.
+accepted = [
+    "GPL-3.0-or-later", # the PDrive crates themselves
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-1-Clause",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unlicense",
+    "0BSD",
+    "BSL-1.0",
+    "CDLA-Permissive-2.0",
+    "LGPL-2.1-or-later",
+    "bzip2-1.0.6", # libbz2-rs-sys (libproton_crypto.so): permissive, notice recommended
+]
+targets = ["x86_64-unknown-linux-gnu"]
+ignore-build-dependencies = false
+ignore-dev-dependencies = true
+ignore-transitive-dependencies = false
+workarounds = []
+
+# The Proton crates (proton-crypto, proton-crypto-account, proton-rpgp, proton-srp) declare no
+# `license` field, only a LICENSE file ("The MIT License", Copyright (c) 2025 Proton AG, same
+# checksum in the four crates): cargo-about identifies it as MIT and warns about the missing field.

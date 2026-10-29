@@ -16,23 +16,27 @@ Copyright: 2025-2026 Proton AG
 License: Expat
 Comment: Prebuilt (NativeAOT) from https://github.com/ProtonDriveApps/sdk at
  the revision recorded in native/linux-x64/SOURCES.txt. Licence text:
- LICENSE-proton-sdk.md. The library also embeds the .NET runtime and NuGet
- packages, see THIRD_PARTY_NOTICES (audit to complete).
+ LICENSE-proton-sdk.md. The library also embeds the .NET runtime (MIT, with
+ its third-party notices: LICENSE-dotnet-runtime*.txt) and NuGet packages
+ (MIT, BSD-3-Clause, Apache-2.0), see THIRD_PARTY_NOTICES and licenses/nuget-sdk.tsv.
 
 Files: native/linux-x64/libproton_crypto.so
 Copyright: 2025 Proton AG
 License: Expat
 Comment: Prebuilt from https://github.com/ProtonDriveApps/dotnet-crypto at the
  revision recorded in native/linux-x64/SOURCES.txt. Licence text:
- LICENSE-proton-dotnet-crypto.txt. Statically linked Rust crates: see
- THIRD_PARTY_NOTICES (audit to complete).
+ LICENSE-proton-dotnet-crypto.txt. Statically linked Rust crates (mostly MIT,
+ also BSD-3-Clause, Apache-2.0, Zlib, Unicode-3.0, bzip2-1.0.6): see
+ THIRD_PARTY_NOTICES and licenses/rust-proton-crypto.tsv.
 
 Files: vendor/*
 Copyright: the authors of each crate
 License: other
 Comment: Rust crates vendored with cargo vendor. Each directory carries its own
  licence files; THIRD_PARTY_CRATES.txt gives the licence expression declared by
- each crate. Per-crate audit to complete.
+ each crate. Audit of the crates linked into the programs (licenses/rust-pdrive.tsv):
+ MIT, Apache-2.0, BSD-3-Clause, ISC, Zlib, Unicode-3.0, Unlicense, CDLA-Permissive-2.0,
+ all compatible with GPL-3+.
 
 License: GPL-3+
  This program is free software: you can redistribute it and/or modify it under

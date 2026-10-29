@@ -21,9 +21,11 @@ Name:           pdrive-for-linux
 Version:        0.1.0
 Release:        1%{?dist}
 Summary:        Unofficial Proton Drive client for Linux (FUSE mount, Nautilus integration)
-# GPL: this project. MIT: Proton Drive SDK and Proton cryptography (native libraries).
-# Vendored Rust crates: see THIRD_PARTY_NOTICES / THIRD_PARTY_CRATES.txt, audit TO COMPLETE.
-License:        GPL-3.0-or-later AND MIT
+# GPL-3.0-or-later: this project. Bundled components, audited 29/10/2026 (THIRD_PARTY_NOTICES,
+# licenses/*.tsv): MIT (Proton SDK and cryptography, .NET runtime and Microsoft NuGet packages,
+# most Rust crates), Apache-2.0, BSD-3-Clause, ISC, Zlib, Unicode-3.0, Unlicense, CDLA-Permissive-2.0
+# (webpki-roots), bzip2-1.0.6 (libbz2-rs-sys), SQLite public domain (SQLite package).
+License:        GPL-3.0-or-later AND MIT AND Apache-2.0 AND BSD-3-Clause AND ISC AND Zlib AND Unicode-3.0 AND Unlicense AND CDLA-Permissive-2.0 AND bzip2-1.0.6
 URL:            https://github.com/bpresles/PDrive-for-Linux
 Source0:        %{url}/releases/download/v%{version}/%{name}-%{version}.tar.xz
 Source1:        %{url}/releases/download/v%{version}/pdrive-native-linux-x64-%{native_id}.tar.xz
@@ -139,6 +141,7 @@ done
 %license THIRD_PARTY_CRATES.txt
 %license pdrive-native-linux-x64-%{native_id}/LICENSE-*
 %doc pdrive-native-linux-x64-%{native_id}/SOURCES.txt
+%doc licenses/*.tsv
 %{_bindir}/pdrive
 %{_bindir}/pdrived
 %{_bindir}/pdrive-app
