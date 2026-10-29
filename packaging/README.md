@@ -18,6 +18,12 @@ Locally: `scripts/build-packages.sh [rpm|deb]` (podman or docker). Release: push
 `.github/workflows/release.yml` fails unless the tag equals Cargo.toml, the spec and
 `debian/changelog` (`scripts/check-version.sh`). To bump the version, edit
 `[workspace.package]` in Cargo.toml, `Version:` in the spec and `debian/changelog`.
+
+The `release` job attaches the packages and `SHA256SUMS` to the release of the tag. If a release for
+the tag already exists (published, or a draft from an earlier run), the files are uploaded to it with
+`gh release upload --clobber` and its title, notes and state are left alone, so a re-run is safe.
+Otherwise a draft is created; publishing it stays a manual step. Drafts are found by listing the
+releases and filtering on `tag_name`, since they are not reachable by tag through the API.
 `%global native_id` in the spec follows the revisions pinned in `scripts/build-native.sh`.
 
 ## COPR
