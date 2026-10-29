@@ -107,7 +107,7 @@ Stratégie retenue : les bibliothèques natives sont précompilées une seule fo
 - [ ] RPM : publication via COPR. À faire : créer le projet COPR, renseigner la variable `COPR_PROJECT` et le secret `COPR_CONFIG` (job `copr` de `release.yml`, envoi du SRPM), tester une première construction ; auditer les licences des crates vendorisées et des paquets NuGet embarqués (`THIRD_PARTY_NOTICES`).
 - [x] DEB : `debian/` (debhelper 13), construit en conteneur Debian 13 (rustc par rustup, les dépendances exigent Rust 1.92), lintian sans erreur. Non testé : installation sur Debian/Ubuntu, Ubuntu 24.04 (libadwaita 1.5 trop ancienne).
 - [ ] Workflow GitHub Actions déclenché par un tag `v*` (`.github/workflows/release.yml`) : écrit, jamais exécuté. À faire : un premier tag de test sur un dépôt d'essai, vérification du job `native`.
-- [ ] Version unique propagée partout : `scripts/check-version.sh` vérifie `Cargo.toml`, le spec, `debian/changelog` et le tag (utilisé par le workflow). Reste `x-pm-appversion`.
+- [x] Version unique propagée partout : `scripts/check-version.sh` vérifie `Cargo.toml`, le spec, `debian/changelog` et le tag (utilisé par le workflow). `x-pm-appversion` est construit dans `crates/pdcore/src/config.rs` (`APP_VERSION`) avec `env!("CARGO_PKG_VERSION")` : il suivait déjà `Cargo.toml` ; un test le vérifie. Le canal reste `-alpha` (convention depuis le premier commit, honnête avant la 1.0) : à revoir à la 1.0.
 
 ## 2. Compléter les fonctions
 
