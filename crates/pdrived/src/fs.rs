@@ -18,9 +18,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use fuser::{
-    BsdFileFlags, Errno, FileAttr, FileHandle, FileType, Filesystem, FopenFlags, Generation, INodeNo, LockOwner, OpenAccMode,
-    OpenFlags, RenameFlags, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite, Request,
-    TimeOrNow, WriteFlags,
+    BsdFileFlags, Errno, FileAttr, FileHandle, FileType, Filesystem, FopenFlags, Generation, INodeNo, LockOwner, OpenAccMode, OpenFlags, RenameFlags,
+    ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite, Request, TimeOrNow, WriteFlags,
 };
 
 use crate::content::{Opened, Transfer};
@@ -298,17 +297,7 @@ impl Filesystem for DriveFs {
         });
     }
 
-    fn read(
-        &self,
-        _req: &Request,
-        _ino: INodeNo,
-        fh: FileHandle,
-        offset: u64,
-        size: u32,
-        _flags: OpenFlags,
-        _lock_owner: Option<LockOwner>,
-        reply: ReplyData,
-    ) {
+    fn read(&self, _req: &Request, _ino: INodeNo, fh: FileHandle, offset: u64, size: u32, _flags: OpenFlags, _lock_owner: Option<LockOwner>, reply: ReplyData) {
         let Some(open_file) = self.files().get(&fh.0).cloned() else { return reply.error(Errno::EBADF) };
         let end = offset + u64::from(size);
         // Fast path, served on the FUSE thread: the range is available locally.
@@ -335,23 +324,15 @@ impl Filesystem for DriveFs {
             };
             drop(source);
             if let Some(transfer) = transfer
-                && !transfer.wait_for(end).await {
-                    return reply.error(Errno::EIO);
-                }
+                && !transfer.wait_for(end).await
+            {
+                return reply.error(Errno::EIO);
+            }
             reply_read(&file, offset, size, reply);
         });
     }
 
-    fn release(
-        &self,
-        _req: &Request,
-        _ino: INodeNo,
-        fh: FileHandle,
-        _flags: OpenFlags,
-        _lock_owner: Option<LockOwner>,
-        _flush: bool,
-        reply: ReplyEmpty,
-    ) {
+    fn release(&self, _req: &Request, _ino: INodeNo, fh: FileHandle, _flags: OpenFlags, _lock_owner: Option<LockOwner>, _flush: bool, reply: ReplyEmpty) {
         if let Some(open_file) = self.files().remove(&fh.0) {
             let drive = self.drive.clone();
             self.runtime.spawn(async move {
@@ -511,16 +492,7 @@ impl Filesystem for DriveFs {
         reply_result(&self.runtime, reply, async move { drive.remove(parent.0, &name, true).await });
     }
 
-    fn rename(
-        &self,
-        req: &Request,
-        parent: INodeNo,
-        name: &OsStr,
-        newparent: INodeNo,
-        newname: &OsStr,
-        flags: RenameFlags,
-        reply: ReplyEmpty,
-    ) {
+    fn rename(&self, req: &Request, parent: INodeNo, name: &OsStr, newparent: INodeNo, newname: &OsStr, flags: RenameFlags, reply: ReplyEmpty) {
         if self.apply_replayed_change(req) {
             return reply.ok();
         }

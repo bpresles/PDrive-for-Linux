@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::content::Opened;
 use crate::drive::Drive;
-use crate::tree::{is_local, EntryKind};
+use crate::tree::{EntryKind, is_local};
 use crate::writes::is_temporary;
 
 /// State shown as an emblem by the Nautilus extension.
@@ -160,9 +160,7 @@ impl Drive {
         let tree = self.tree();
         let entry = tree.get(ino)?;
         match &entry.kind {
-            EntryKind::File { revision_uid, .. } if !is_local(&entry.uid) && !revision_uid.is_empty() => {
-                Some((entry.uid.clone(), revision_uid.clone()))
-            }
+            EntryKind::File { revision_uid, .. } if !is_local(&entry.uid) && !revision_uid.is_empty() => Some((entry.uid.clone(), revision_uid.clone())),
             _ => None,
         }
     }

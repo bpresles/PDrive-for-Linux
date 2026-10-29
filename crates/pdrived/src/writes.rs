@@ -21,14 +21,14 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use fuser::Errno;
-use pdsdk::proto::{self, NodeMoveItem};
 use pdsdk::SdkError;
+use pdsdk::proto::{self, NodeMoveItem};
 use serde::{Deserialize, Serialize};
 
 use crate::activity::{Kind, State};
 use crate::content::Opened;
 use crate::drive::Drive;
-use crate::tree::{is_local, EntryKind, NodeInfo};
+use crate::tree::{EntryKind, NodeInfo, is_local};
 
 /// Quiet period after the last close before uploading.
 const UPLOAD_DELAY: Duration = Duration::from_secs(3);
@@ -469,12 +469,7 @@ impl Drive {
 
         if !is_local(&source_uid) {
             let current_parent_uid = self.tree().get(parent).map(|p| p.uid.clone()).ok_or(Errno::ENOENT)?;
-            let item = NodeMoveItem {
-                node_uid: source_uid,
-                current_parent_uid,
-                current_name: name.to_owned(),
-                target_name: new_name.to_owned(),
-            };
+            let item = NodeMoveItem { node_uid: source_uid, current_parent_uid, current_name: name.to_owned(), target_name: new_name.to_owned() };
             self.client.move_node(item, &new_parent_uid).await.map_err(|e| {
                 eprintln!("cannot move {name} to {new_name}: {e}");
                 errno_of(&e)
@@ -605,7 +600,6 @@ fn media_type(name: &str, path: &std::path::Path) -> String {
     gio::content_type_get_mime_type(&content_type).map_or_else(|| "application/octet-stream".to_owned(), |m| m.to_string())
 }
 
-
 /// Reads the journal of a staging file; none if it is unreadable, if the content is missing or if
 /// it belongs to an editor temporary file (never uploaded).
 fn load_journal(journal_path: &std::path::Path, data: &std::path::Path) -> Option<Journal> {
@@ -635,12 +629,29 @@ mod tests {
     use super::*;
 
     fn journal(name: &str) -> Journal {
-        Journal { file_uid: Some("vol~file".into()), base_revision_uid: Some("vol~file~rev".into()), parent_uid: "vol~dir".into(), name: name.into(), mtime: 1_700_000_000 }
+        Journal {
+            file_uid: Some("vol~file".into()),
+            base_revision_uid: Some("vol~file~rev".into()),
+            parent_uid: "vol~dir".into(),
+            name: name.into(),
+            mtime: 1_700_000_000,
+        }
     }
 
     #[test]
     fn temporary_files_are_recognised() {
-        for name in [".~lock.report.odt#", ".goutputstream-ABC123", ".#notes.txt", "notes.txt~", "a.swp", "a.swo", "a.swx", "a.kate-swp", "movie.mkv.part", "x.crdownload"] {
+        for name in [
+            ".~lock.report.odt#",
+            ".goutputstream-ABC123",
+            ".#notes.txt",
+            "notes.txt~",
+            "a.swp",
+            "a.swo",
+            "a.swx",
+            "a.kate-swp",
+            "movie.mkv.part",
+            "x.crdownload",
+        ] {
             assert!(is_temporary(name), "{name} should be temporary");
         }
         for name in ["report.odt", "swp", "notes.txt", "a.part.txt", "~notes", ".bashrc", "lock"] {

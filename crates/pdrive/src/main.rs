@@ -12,9 +12,9 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use pdcore::config;
-use pdsdk::proto::{node::Kind, Node};
+use pdsdk::proto::{Node, node::Kind};
 use pdsdk::{ClientOptions, DriveClient};
 
 #[tokio::main]

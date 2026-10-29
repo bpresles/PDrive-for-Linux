@@ -118,7 +118,8 @@ impl StatusWindow {
         buttons.append(&open_folder);
         buttons.append(&view_online);
 
-        let main = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(18).margin_top(18).margin_bottom(18).margin_start(18).margin_end(18).build();
+        let main =
+            gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(18).margin_top(18).margin_bottom(18).margin_start(18).margin_end(18).build();
         main.append(&identity);
         main.append(&scroller);
         main.append(&buttons);
@@ -153,20 +154,8 @@ impl StatusWindow {
             .content(&toolbar)
             .build();
 
-        let this = std::rc::Rc::new(Self {
-            window,
-            banner,
-            stack,
-            sign_in,
-            avatar,
-            account,
-            quota,
-            list,
-            status,
-            spinner,
-            mount,
-            activity: RefCell::new(Vec::new()),
-        });
+        let this =
+            std::rc::Rc::new(Self { window, banner, stack, sign_in, avatar, account, quota, list, status, spinner, mount, activity: RefCell::new(Vec::new()) });
         // Relative times age while the window stays open.
         let weak = std::rc::Rc::downgrade(&this);
         glib::timeout_add_seconds_local(30, move || {
@@ -244,7 +233,11 @@ fn activity_row(entry: &Activity) -> adw::ActionRow {
     if entry.size > 0 {
         details.push(glib::format_size(entry.size).to_string());
     }
-    let row = adw::ActionRow::builder().title(glib::markup_escape_text(name)).subtitle(glib::markup_escape_text(&details.join(" · "))).tooltip_text(&entry.path).build();
+    let row = adw::ActionRow::builder()
+        .title(glib::markup_escape_text(name))
+        .subtitle(glib::markup_escape_text(&details.join(" · ")))
+        .tooltip_text(&entry.path)
+        .build();
     row.add_prefix(&gtk::Image::from_icon_name(match entry.kind.as_str() {
         "upload" => "go-up-symbolic",
         "download" => "go-down-symbolic",

@@ -11,8 +11,8 @@
 //!     cargo test -p pdsdk --test bridge -- --ignored
 
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use pdsdk::proto::{AccountRequest, Any, HttpRequest};
 use pdsdk::{BoxFuture, ClientOptions, DriveClient, Host, HttpReply, SdkError};

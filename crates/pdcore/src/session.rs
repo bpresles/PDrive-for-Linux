@@ -54,9 +54,7 @@ pub async fn save(session: &Session) -> Result<()> {
     let keyring = keyring().await?;
     keyring.unlock().await?;
     let secret = zeroize::Zeroizing::new(serde_json::to_vec(session)?);
-    keyring
-        .create_item("PDrive for Linux: Proton Drive session", &attributes(), secret.as_slice(), true)
-        .await?;
+    keyring.create_item("PDrive for Linux: Proton Drive session", &attributes(), secret.as_slice(), true).await?;
     Ok(())
 }
 

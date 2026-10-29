@@ -271,11 +271,7 @@ fn activity_status(drive: &Drive) -> (i32, String) {
     if activity.downloads > 0 {
         details.push(tr_n("{} file downloading", "{} files downloading", activity.downloads as u32, &[&activity.downloads.to_string()]));
     }
-    if details.is_empty() {
-        (STATUS_IDLE, tr("Up to date"))
-    } else {
-        (STATUS_SYNCING, details.join(", "))
-    }
+    if details.is_empty() { (STATUS_IDLE, tr("Up to date")) } else { (STATUS_SYNCING, details.join(", ")) }
 }
 
 fn account_properties(drive: &Drive) -> HashMap<String, Variant> {
@@ -311,10 +307,7 @@ fn register_cloud_providers(
         })
         .build()?;
 
-    connection
-        .register_object(PROVIDER_PATH, &interface(PROVIDER_INTERFACE))
-        .property(|_, _, _, _, _| PROVIDER_NAME.to_variant())
-        .build()?;
+    connection.register_object(PROVIDER_PATH, &interface(PROVIDER_INTERFACE)).property(|_, _, _, _, _| PROVIDER_NAME.to_variant()).build()?;
 
     let account_drive = drive.clone();
     connection
@@ -365,10 +358,7 @@ fn register_cloud_providers(
         }
         let current = account_status(&poll_drive);
         if current != last {
-            let changed = HashMap::from([
-                ("Status".to_owned(), current.0.to_variant()),
-                ("StatusDetails".to_owned(), current.1.to_variant()),
-            ]);
+            let changed = HashMap::from([("Status".to_owned(), current.0.to_variant()), ("StatusDetails".to_owned(), current.1.to_variant())]);
             let parameters = (ACCOUNT_INTERFACE, changed, Vec::<String>::new()).to_variant();
             let _ = poll_connection.emit_signal(None, ACCOUNT_PATH, "org.freedesktop.DBus.Properties", "PropertiesChanged", Some(&parameters));
             last = current;

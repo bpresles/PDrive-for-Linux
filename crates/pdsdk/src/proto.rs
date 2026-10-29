@@ -13,17 +13,17 @@ pub const TYPE_URL_PREFIX: &str = "type.googleapis.com/";
 
 /// Wraps a message into an `Any` with the fully-qualified Protobuf name the SDK expects.
 pub fn pack(full_name: &str, message: &impl prost::Message) -> Any {
-    Any {
-        type_url: format!("{TYPE_URL_PREFIX}{full_name}"),
-        value: message.encode_to_vec(),
-    }
+    Any { type_url: format!("{TYPE_URL_PREFIX}{full_name}"), value: message.encode_to_vec() }
 }
 
 // --- Envelope ---------------------------------------------------------------------------------
 
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct Request {
-    #[prost(oneof = "request::Payload", tags = "100, 101, 102, 200, 1000, 1001, 1002, 1003, 1004, 1007, 1008, 1009, 1010, 1015, 1019, 1021, 1022, 1101, 1102, 1104, 1108, 1200, 1202, 1205, 1208")]
+    #[prost(
+        oneof = "request::Payload",
+        tags = "100, 101, 102, 200, 1000, 1001, 1002, 1003, 1004, 1007, 1008, 1009, 1010, 1015, 1019, 1021, 1022, 1101, 1102, 1104, 1108, 1200, 1202, 1205, 1208"
+    )]
     pub payload: Option<request::Payload>,
 }
 

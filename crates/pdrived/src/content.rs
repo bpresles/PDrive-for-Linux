@@ -164,11 +164,10 @@ impl ContentCache {
         if let Some(opened) = self.join(revision_uid)? {
             return Ok(opened);
         }
-        if !need_all
-            && let Ok(file) = File::open(path.with_extension("head")) {
-                let length = file.metadata()?.len();
-                return Ok(Opened::Head(file, length));
-            }
+        if !need_all && let Ok(file) = File::open(path.with_extension("head")) {
+            let length = file.metadata()?.len();
+            return Ok(Opened::Head(file, length));
+        }
         match self.start(client, revision_uid, label, size, on_complete).await? {
             Some(transfer) => Ok(Opened::Partial(File::open(path.with_extension("part"))?, transfer)),
             // Started concurrently by someone else.
@@ -243,9 +242,10 @@ impl ContentCache {
             } else {
                 keep_head(&partial, &head, written);
                 if let Err(e) = &result
-                    && !task_transfer.cancelled.load(Ordering::SeqCst) {
-                        eprintln!("cannot download revision {revision_uid}: {e}");
-                    }
+                    && !task_transfer.cancelled.load(Ordering::SeqCst)
+                {
+                    eprintln!("cannot download revision {revision_uid}: {e}");
+                }
                 Progress::Failed
             };
             if cache.verbose {

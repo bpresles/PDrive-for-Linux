@@ -10,15 +10,15 @@ use std::time::{Duration, SystemTime};
 use fuser::{Errno, INodeNo, Notifier};
 use pdcore::api::ApiClient;
 use pdsdk::DriveClient;
-use pdsdk::proto::{file_thumbnail, ThumbnailType};
+use pdsdk::proto::{ThumbnailType, file_thumbnail};
 
 use crate::activity::{ActivityLog, Kind};
 use crate::content::{ContentCache, Opened};
+use crate::pins::Pins;
 use crate::replay::{self, Replay};
 use crate::thumbnails::ThumbnailCache;
-use crate::pins::Pins;
-use crate::writes::Staging;
 use crate::tree::{EntryKind, Invalidation, NodeInfo, NodeKind, Tree};
+use crate::writes::Staging;
 
 /// Fetching the thumbnails of a folder listing gives up after this delay.
 const THUMBNAILS_TIMEOUT: Duration = Duration::from_secs(15);
@@ -26,8 +26,13 @@ const THUMBNAILS_TIMEOUT: Duration = Duration::from_secs(15);
 /// A remote change waiting to be applied by the FUSE callback that the watcher triggers
 /// through the mount (so that the kernel emits inotify events for it).
 pub enum Change {
-    Update { parent: u64, node: NodeInfo },
-    Remove { uid: String },
+    Update {
+        parent: u64,
+        node: NodeInfo,
+    },
+    Remove {
+        uid: String,
+    },
     /// Nothing changed in the tree, but the file manager must re-read the file information
     /// (e.g. its thumbnail became available).
     Refresh,
@@ -199,8 +204,7 @@ impl Drive {
             eprintln!("cannot list folder {uid}: {e}");
             Errno::EIO
         })?;
-        let with_thumbnails: Vec<NodeInfo> =
-            children.iter().filter(|n| matches!(n.kind, NodeKind::File { has_thumbnail: true, .. })).cloned().collect();
+        let with_thumbnails: Vec<NodeInfo> = children.iter().filter(|n| matches!(n.kind, NodeKind::File { has_thumbnail: true, .. })).cloned().collect();
         {
             let mut tree = self.tree();
             // Another request may have loaded it meanwhile, or the folder may be gone.
@@ -320,4 +324,3 @@ impl Drive {
         }
     }
 }
-

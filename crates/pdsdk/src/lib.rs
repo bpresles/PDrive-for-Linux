@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex};
 use prost::Message;
 use tokio::sync::{mpsc, oneshot};
 
-use proto::{request::Payload, response, Any, ErrorDomain, Request, Response};
+use proto::{Any, ErrorDomain, Request, Response, request::Payload, response};
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -38,11 +38,7 @@ impl ByteArray {
     /// # Safety
     /// The pointer must be valid for `length` bytes for the duration of the borrow.
     unsafe fn as_slice<'a>(self) -> &'a [u8] {
-        if self.pointer.is_null() || self.length == 0 {
-            &[]
-        } else {
-            unsafe { std::slice::from_raw_parts(self.pointer, self.length) }
-        }
+        if self.pointer.is_null() || self.length == 0 { &[] } else { unsafe { std::slice::from_raw_parts(self.pointer, self.length) } }
     }
 }
 
@@ -85,11 +81,7 @@ impl From<proto::Error> for SdkError {
             message.push_str(&i.message);
             inner = i.inner_error;
         }
-        SdkError::Sdk {
-            domain: ErrorDomain::try_from(e.domain).unwrap_or(ErrorDomain::Undefined),
-            message,
-            code: e.primary_code,
-        }
+        SdkError::Sdk { domain: ErrorDomain::try_from(e.domain).unwrap_or(ErrorDomain::Undefined), message, code: e.primary_code }
     }
 }
 
@@ -253,11 +245,7 @@ async fn read_sdk_stream(stream_handle: i64) -> Result<Vec<u8>> {
     let mut body = Vec::new();
     let mut buffer = vec![0u8; 64 * 1024];
     loop {
-        let read = proto::StreamReadRequest {
-            stream_handle,
-            buffer_pointer: buffer.as_mut_ptr() as i64,
-            buffer_length: buffer.len() as i32,
-        };
+        let read = proto::StreamReadRequest { stream_handle, buffer_pointer: buffer.as_mut_ptr() as i64, buffer_length: buffer.len() as i32 };
         let n: i32 = unpack(call(Payload::StreamRead(read)).await?)?;
         if n <= 0 {
             return Ok(body);
@@ -488,10 +476,8 @@ impl DriveClient {
             cancellation_token_source_handle,
         };
         let controller: i64 = unpack(invoke(Request { payload: Some(Payload::DownloadToStream(request)) }, bindings.clone(), rx).await?)?;
-        let completion = call(Payload::DownloadControllerAwaitCompletion(proto::DownloadControllerAwaitCompletionRequest {
-            download_controller_handle: controller,
-        }))
-        .await;
+        let completion =
+            call(Payload::DownloadControllerAwaitCompletion(proto::DownloadControllerAwaitCompletionRequest { download_controller_handle: controller })).await;
         call(Payload::DownloadControllerFree(proto::DownloadControllerFreeRequest { download_controller_handle: controller })).await?;
         drop(bindings);
         completion.map(|_| ())
@@ -596,10 +582,8 @@ impl DriveClient {
         };
         let result = async {
             let controller: i64 = unpack(invoke(Request { payload: Some(Payload::UploadFromFile(request)) }, bindings.clone(), rx).await?)?;
-            let completion = call(Payload::UploadControllerAwaitCompletion(proto::UploadControllerAwaitCompletionRequest {
-                upload_controller_handle: controller,
-            }))
-            .await;
+            let completion =
+                call(Payload::UploadControllerAwaitCompletion(proto::UploadControllerAwaitCompletionRequest { upload_controller_handle: controller })).await;
             call(Payload::UploadControllerFree(proto::UploadControllerFreeRequest { upload_controller_handle: controller })).await?;
             unpack::<proto::UploadResult>(completion?)
         }
@@ -701,7 +685,7 @@ mod tests {
 
     #[test]
     fn string_result_display() {
-        use proto::{string_result::Result as R, StringResult};
+        use proto::{StringResult, string_result::Result as R};
         assert_eq!(StringResult { result: Some(R::Value("a".into())) }.display(), "a");
         assert_eq!(StringResult { result: None }.display(), "<missing>");
         let failed = StringResult { result: Some(R::Error(proto::DriveError { message: Some("bad key".into()), inner_error: None })) };

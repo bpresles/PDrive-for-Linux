@@ -90,11 +90,7 @@ impl Daemon {
     pub async fn recent_activity(&self) -> Vec<Activity> {
         let reply = self.proxy.call_future("GetRecentActivity", None, gio::DBusCallFlags::NONE, 5000).await;
         let entries = reply.ok().and_then(|r| r.get::<(Vec<(String, String, u64, i64, String)>,)>()).map(|(e,)| e);
-        entries
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(path, kind, size, timestamp, state)| Activity { path, kind, size, timestamp, state })
-            .collect()
+        entries.unwrap_or_default().into_iter().map(|(path, kind, size, timestamp, state)| Activity { path, kind, size, timestamp, state }).collect()
     }
 
     pub fn set_mounted(&self, mounted: bool) {

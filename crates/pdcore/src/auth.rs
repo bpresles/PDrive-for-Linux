@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use rand::RngCore;
@@ -16,7 +16,7 @@ use reqwest::{Method, StatusCode};
 use serde::Deserialize;
 use zeroize::Zeroizing;
 
-use crate::api::{parse_json, ApiClient};
+use crate::api::{ApiClient, parse_json};
 use crate::config::{ACCOUNT_URL, AUTH_CLIENT_ID};
 use crate::session::Session;
 
@@ -77,12 +77,7 @@ pub async fn login_via_browser(api: &ApiClient) -> Result<Session> {
         }
         let status: ForkStatus = parse_json(reply)?;
         let key_password = decrypt_key_password(&key, &status.payload)?;
-        return Ok(Session {
-            uid: status.uid,
-            access_token: status.access_token,
-            refresh_token: status.refresh_token,
-            key_password,
-        });
+        return Ok(Session { uid: status.uid, access_token: status.access_token, refresh_token: status.refresh_token, key_password });
     }
 }
 
@@ -95,9 +90,7 @@ fn decrypt_key_password(key: &[u8; 32], payload: &str) -> Result<String> {
     let (nonce, ciphertext) = blob.split_at(NONCE_LENGTH);
     let cipher = Aes256Gcm::new_from_slice(key)?;
     let plaintext = Zeroizing::new(
-        cipher
-            .decrypt(Nonce::from_slice(nonce), Payload { msg: ciphertext, aad: b"fork" })
-            .map_err(|_| anyhow!("cannot decrypt the fork payload"))?,
+        cipher.decrypt(Nonce::from_slice(nonce), Payload { msg: ciphertext, aad: b"fork" }).map_err(|_| anyhow!("cannot decrypt the fork payload"))?,
     );
     let payload: ForkPayload = serde_json::from_slice(&plaintext).context("invalid fork payload")?;
     Ok(payload.key_password)

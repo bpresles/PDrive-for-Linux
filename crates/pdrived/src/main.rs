@@ -35,10 +35,10 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use fuser::{Config, MountOption};
-use tokio::signal::unix::{signal, SignalKind};
+use tokio::signal::unix::{SignalKind, signal};
 
 use activity::ActivityLog;
-use config::{Settings, APP_DIR};
+use config::{APP_DIR, Settings};
 use content::ContentCache;
 use drive::Drive;
 use fs::DriveFs;
@@ -160,12 +160,8 @@ fn mount(drive: &Arc<Drive>) -> Result<fuser::Session<DriveFs>> {
     let target = &drive.mount_target;
     mountpoint::prepare_dir(target)?;
     let mut config = Config::default();
-    config.mount_options = vec![
-        MountOption::FSName("pdrive".into()),
-        MountOption::Subtype("pdrive".into()),
-        MountOption::NoAtime,
-        MountOption::DefaultPermissions,
-    ];
+    config.mount_options =
+        vec![MountOption::FSName("pdrive".into()), MountOption::Subtype("pdrive".into()), MountOption::NoAtime, MountOption::DefaultPermissions];
     let session = fuser::Session::new(DriveFs::new(drive.clone(), tokio::runtime::Handle::current()), target, &config)
         .with_context(|| format!("cannot mount on {}", target.display()))?;
     drive.set_session(Some(session.notifier()));

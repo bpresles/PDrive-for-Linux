@@ -26,11 +26,7 @@ const STOP_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Path of a program installed next to this one, otherwise looked up in the PATH.
 pub fn program(name: &str) -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| Some(exe.parent()?.join(name)))
-        .filter(|path| path.exists())
-        .unwrap_or_else(|| name.into())
+    std::env::current_exe().ok().and_then(|exe| Some(exe.parent()?.join(name))).filter(|path| path.exists()).unwrap_or_else(|| name.into())
 }
 
 struct Inner {

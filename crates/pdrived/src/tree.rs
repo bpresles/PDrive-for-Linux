@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use pdsdk::proto::{node, Node, Timestamp};
+use pdsdk::proto::{Node, Timestamp, node};
 
 pub const ROOT_INO: u64 = 1;
 
@@ -87,8 +87,14 @@ fn to_system_time(t: Option<Timestamp>) -> SystemTime {
 
 pub enum EntryKind {
     /// `None` until the listing has been loaded.
-    Folder { children: Option<Vec<u64>> },
-    File { size: u64, revision_uid: String, has_thumbnail: bool },
+    Folder {
+        children: Option<Vec<u64>>,
+    },
+    File {
+        size: u64,
+        revision_uid: String,
+        has_thumbnail: bool,
+    },
 }
 
 pub struct Entry {
@@ -115,13 +121,7 @@ pub struct Tree {
 
 impl Tree {
     pub fn new(root_uid: String) -> Self {
-        let root = Entry {
-            uid: root_uid.clone(),
-            parent: ROOT_INO,
-            name: String::new(),
-            kind: EntryKind::Folder { children: None },
-            mtime: UNIX_EPOCH,
-        };
+        let root = Entry { uid: root_uid.clone(), parent: ROOT_INO, name: String::new(), kind: EntryKind::Folder { children: None }, mtime: UNIX_EPOCH };
         Self { entries: HashMap::from([(ROOT_INO, root)]), by_uid: HashMap::from([(root_uid, ROOT_INO)]), next_ino: ROOT_INO + 1 }
     }
 
@@ -261,10 +261,13 @@ impl Tree {
             };
             (ino, e.parent, e.name.clone(), revision)
         });
-        let (name, revision) = (node.name.clone(), match &node.kind {
-            NodeKind::File { revision_uid, .. } => Some(revision_uid.clone()),
-            NodeKind::Folder => None,
-        });
+        let (name, revision) = (
+            node.name.clone(),
+            match &node.kind {
+                NodeKind::File { revision_uid, .. } => Some(revision_uid.clone()),
+                NodeKind::Folder => None,
+            },
+        );
 
         // A node with the same name in the target folder is replaced.
         if let Some(replaced) = self.child(parent, &name).filter(|c| Some(*c) != previous.as_ref().map(|p| p.0)) {
@@ -316,9 +319,10 @@ impl Tree {
         let mut invalidations = Vec::new();
         for (ino, entry) in &mut self.entries {
             if let EntryKind::Folder { children } = &mut entry.kind
-                && children.take().is_some() {
-                    invalidations.push(Invalidation::Inode(*ino));
-                }
+                && children.take().is_some()
+            {
+                invalidations.push(Invalidation::Inode(*ino));
+            }
         }
         invalidations
     }
@@ -348,9 +352,10 @@ impl Tree {
 
     fn attach(&mut self, parent: u64, ino: u64) {
         if let Some(Entry { kind: EntryKind::Folder { children: Some(children) }, .. }) = self.entries.get_mut(&parent)
-            && !children.contains(&ino) {
-                children.push(ino);
-            }
+            && !children.contains(&ino)
+        {
+            children.push(ino);
+        }
     }
 
     fn detach(&mut self, parent: u64, ino: u64) {
@@ -375,7 +380,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use pdsdk::proto::{string_result, FileNode, FileRevision, FolderNode, StringResult, ThumbnailHeader, ThumbnailType};
+    use pdsdk::proto::{FileNode, FileRevision, FolderNode, StringResult, ThumbnailHeader, ThumbnailType, string_result};
 
     fn mtime(secs: u64) -> SystemTime {
         UNIX_EPOCH + Duration::from_secs(secs)

@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use pdsdk::proto::{drive_event::Event, DriveEvent};
+use pdsdk::proto::{DriveEvent, drive_event::Event};
 
 use crate::activity::Kind;
 use crate::drive::{Change, Drive};
@@ -47,7 +47,6 @@ pub async fn run(drive: Arc<Drive>, scope: String) {
         }
     }
 }
-
 
 async fn apply(drive: &Arc<Drive>, event: &DriveEvent) {
     let planned = match &event.event {

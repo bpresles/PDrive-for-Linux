@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use gettextrs::{bind_textdomain_codeset, bindtextdomain, gettext, ngettext, setlocale, textdomain, LocaleCategory};
+use gettextrs::{LocaleCategory, bind_textdomain_codeset, bindtextdomain, gettext, ngettext, setlocale, textdomain};
 
 pub const DOMAIN: &str = "pdrive";
 
@@ -40,9 +40,7 @@ fn locale_dir() -> PathBuf {
 }
 
 fn has_catalogue(dir: &Path) -> bool {
-    std::fs::read_dir(dir)
-        .map(|entries| entries.flatten().any(|e| e.path().join("LC_MESSAGES").join(format!("{DOMAIN}.mo")).is_file()))
-        .unwrap_or(false)
+    std::fs::read_dir(dir).map(|entries| entries.flatten().any(|e| e.path().join("LC_MESSAGES").join(format!("{DOMAIN}.mo")).is_file())).unwrap_or(false)
 }
 
 pub fn tr(message: &str) -> String {

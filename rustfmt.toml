@@ -1,0 +1,5 @@
+# The code base is written with long lines (up to about 160 columns) and compact one-line
+# structs/calls: these settings keep `cargo fmt` close to the existing style (73 hunks
+# instead of about 450 with the 100-column defaults).
+max_width = 160
+use_small_heuristics = "Max"

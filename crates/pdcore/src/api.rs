@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Bertrand Presles
 //! Authenticated HTTP client for the Proton API, shared by the account code and the SDK host.
 
-use anyhow::{bail, Context, Result};
-use reqwest::{header::HeaderMap, Method, StatusCode};
-use serde::de::DeserializeOwned;
+use anyhow::{Context, Result, bail};
+use reqwest::{Method, StatusCode, header::HeaderMap};
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
 
 use crate::config::{API_BASE_URL, APP_VERSION};
@@ -33,10 +33,7 @@ struct RefreshResponse {
 
 impl ApiClient {
     pub fn new(session: Option<Session>) -> Result<Self> {
-        let http = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(30))
-            .timeout(std::time::Duration::from_secs(300))
-            .build()?;
+        let http = reqwest::Client::builder().connect_timeout(std::time::Duration::from_secs(30)).timeout(std::time::Duration::from_secs(300)).build()?;
         Ok(Self { http, session: Mutex::new(session) })
     }
 
@@ -69,9 +66,7 @@ impl ApiClient {
             request = request.header(name, value);
         }
         if let Some(session) = self.session.lock().await.as_ref() {
-            request = request
-                .header("x-pm-uid", &session.uid)
-                .header("Authorization", format!("Bearer {}", session.access_token));
+            request = request.header("x-pm-uid", &session.uid).header("Authorization", format!("Bearer {}", session.access_token));
         }
         if let Some(body) = body {
             request = request.body(body);
@@ -92,9 +87,7 @@ impl ApiClient {
             "GrantType": "refresh_token",
             "RefreshToken": session.refresh_token,
         });
-        let reply = self
-            .send_once(Method::POST, &Self::url("auth/v4/refresh"), &json_headers(), Some(serde_json::to_vec(&body)?))
-            .await?;
+        let reply = self.send_once(Method::POST, &Self::url("auth/v4/refresh"), &json_headers(), Some(serde_json::to_vec(&body)?)).await?;
         if !reply.status.is_success() {
             return Ok(false);
         }

@@ -16,7 +16,10 @@ pub fn show(parent: &impl IsA<gtk::Widget>, account: &str, restart_daemon: Rc<dy
     let dialog = adw::PreferencesDialog::builder().title(tr("Settings")).build();
     let page = adw::PreferencesPage::new();
 
-    let folder = adw::PreferencesGroup::builder().title(tr("Synchronization")).description(tr("Changes apply when the dialog is closed, restarting the service.")).build();
+    let folder = adw::PreferencesGroup::builder()
+        .title(tr("Synchronization"))
+        .description(tr("Changes apply when the dialog is closed, restarting the service."))
+        .build();
     let mountpoint = adw::EntryRow::builder().title(tr("Mount point")).text(&current.mountpoint).build();
     let cache = adw::SpinRow::with_range(1.0, 1000.0, 1.0);
     cache.set_title(&tr("Cache size (GiB)"));
@@ -51,7 +54,10 @@ pub fn show(parent: &impl IsA<gtk::Widget>, account: &str, restart_daemon: Rc<dy
     sign_out_button.add_css_class("destructive-action");
     let confirm_parent = dialog.clone();
     sign_out_button.connect_clicked(move |_| {
-        let confirm = adw::AlertDialog::new(Some(&tr("Sign out?")), Some(&tr("The service is stopped and the session is removed from this computer. Pending uploads are resumed after the next sign-in.")));
+        let confirm = adw::AlertDialog::new(
+            Some(&tr("Sign out?")),
+            Some(&tr("The service is stopped and the session is removed from this computer. Pending uploads are resumed after the next sign-in.")),
+        );
         confirm.add_responses(&[("cancel", &tr("Cancel")), ("sign-out", &tr("Sign out"))]);
         confirm.set_response_appearance("sign-out", adw::ResponseAppearance::Destructive);
         confirm.set_default_response(Some("cancel"));

@@ -29,7 +29,7 @@ use gtk::{gio, glib};
 use config::APP_ID;
 use daemon::Daemon;
 use pdi18n::tr;
-use supervisor::{program, Supervisor};
+use supervisor::{Supervisor, program};
 use tray::{Command, Icon, TrayState};
 use window::{Status, StatusWindow, View};
 
@@ -212,9 +212,15 @@ impl App {
         let (daemon_events, daemon_receiver) = async_channel::unbounded::<()>();
         let vanished = daemon_events.clone();
         // The callbacks may run on another thread: they only post into a channel.
-        gio::bus_watch_name(gio::BusType::Session, daemon::BUS_NAME, gio::BusNameWatcherFlags::NONE, |_, _, _| {}, move |_, _| {
-            let _ = vanished.try_send(());
-        });
+        gio::bus_watch_name(
+            gio::BusType::Session,
+            daemon::BUS_NAME,
+            gio::BusNameWatcherFlags::NONE,
+            |_, _, _| {},
+            move |_, _| {
+                let _ = vanished.try_send(());
+            },
+        );
         let weak = Rc::downgrade(self);
         glib::spawn_future_local(async move {
             while daemon_receiver.recv().await.is_ok() {
@@ -287,7 +293,11 @@ impl App {
             Some(false) => Status::SignedOut,
             None => Status::Starting,
             Some(true) if !snapshot.connected => {
-                if self.supervisor.active() { Status::Starting } else { Status::Stopped }
+                if self.supervisor.active() {
+                    Status::Starting
+                } else {
+                    Status::Stopped
+                }
             }
             Some(true) => match snapshot.state.as_str() {
                 "syncing" => Status::Syncing,
@@ -423,7 +433,10 @@ impl App {
         if config::autostart_enabled() {
             return;
         }
-        let dialog = adw::AlertDialog::new(Some(&tr("Start PDrive when you log in?")), Some(&tr("The Proton Drive folder is then mounted automatically. You can change this in the settings.")));
+        let dialog = adw::AlertDialog::new(
+            Some(&tr("Start PDrive when you log in?")),
+            Some(&tr("The Proton Drive folder is then mounted automatically. You can change this in the settings.")),
+        );
         dialog.add_responses(&[("no", &tr("Not now")), ("yes", &tr("Start at login"))]);
         dialog.set_response_appearance("yes", adw::ResponseAppearance::Suggested);
         dialog.set_close_response("no");

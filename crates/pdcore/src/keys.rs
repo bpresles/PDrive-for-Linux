@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Bertrand Presles
 //! Account data the SDK asks for: addresses and their unlocked private keys.
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use proton_crypto::crypto::{DataEncoding, PGPProviderSync};
 use proton_crypto_account::keys::{AddressKeys, LockedKey, UserKeys};
 use proton_crypto_account::salts::KeySecret;
@@ -132,10 +132,7 @@ impl AccountKeys {
     }
 
     fn address(&self, address_id: &str) -> Result<&AccountAddress, String> {
-        self.addresses
-            .iter()
-            .find(|a| a.message.address_id == address_id)
-            .ok_or_else(|| format!("unknown address {address_id}"))
+        self.addresses.iter().find(|a| a.message.address_id == address_id).ok_or_else(|| format!("unknown address {address_id}"))
     }
 
     /// Answers an SDK account request.
