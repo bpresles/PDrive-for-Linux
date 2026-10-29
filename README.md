@@ -11,11 +11,11 @@ shows their sync state, with a sidebar entry and a context menu.
 
 Status: early alpha (the application identifies itself to Proton with the `-alpha` channel).
 
-<!-- TODO(author): add screenshots, saved in docs/screenshots/ -->
-<!-- TODO(author): docs/screenshots/nautilus-emblems.png - Nautilus with the state emblems -->
+| Nautilus: state emblems and the "Proton Drive" sidebar entry | Status window | Settings |
+|---|---|---|
+| ![Nautilus with the state emblems and the Proton Drive sidebar entry](docs/screenshots/Nautilus.png) | ![Status window of pdrive-app](docs/screenshots/StatusWindow.png) | ![Settings of pdrive-app](docs/screenshots/Settings.png) |
+
 <!-- TODO(author): docs/screenshots/context-menu.png - "Keep Available Offline" / "Free Up Space" -->
-<!-- TODO(author): docs/screenshots/sidebar.png - the "Proton Drive" entry in the Nautilus sidebar -->
-<!-- TODO(author): docs/screenshots/status-window.png - the status window of pdrive-app -->
 <!-- TODO(author): docs/screenshots/tray-menu.png - the tray icon and its menu -->
 
 ## Features
