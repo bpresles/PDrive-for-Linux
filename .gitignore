@@ -3,3 +3,4 @@
 /native/linux-x64/
 /extension/*.so
 /dist/
+/.superset/config.local.json
