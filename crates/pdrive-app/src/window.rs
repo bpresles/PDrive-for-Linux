@@ -85,7 +85,7 @@ impl StatusWindow {
 
         // Main page.
         let avatar = adw::Avatar::new(56, None, true);
-        let account = gtk::Label::builder().xalign(0.0).hexpand(true).selectable(true).build();
+        let account = gtk::Label::builder().xalign(0.0).hexpand(true).build();
         account.add_css_class("title-4");
         let quota = gtk::Label::builder().xalign(0.0).build();
         quota.add_css_class("dim-label");

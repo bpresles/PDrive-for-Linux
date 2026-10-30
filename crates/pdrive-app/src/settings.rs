@@ -76,6 +76,21 @@ pub fn show(parent: &impl IsA<gtk::Widget>, account: &str, restart_daemon: Rc<dy
     page.add(&account_group);
 
     dialog.add(&page);
+    // A shown dialog focuses its first field, which selects the mount point: the page takes the
+    // initial focus instead, and takes it back from a text field when clicking outside of it.
+    page.set_focusable(true);
+    dialog.set_focus(Some(&page));
+    let click = gtk::GestureClick::new();
+    click.set_propagation_phase(gtk::PropagationPhase::Capture);
+    click.connect_pressed(move |gesture, _, x, y| {
+        let Some(dialog) = gesture.widget() else { return };
+        let Some(focus) = dialog.root().and_then(|root| root.focus()).filter(|focus| focus.is::<gtk::Text>()) else { return };
+        let field = focus.ancestor(adw::PreferencesRow::static_type()).unwrap_or(focus);
+        if !dialog.pick(x, y, gtk::PickFlags::DEFAULT).is_some_and(|target| target == field || target.is_ancestor(&field)) {
+            page.grab_focus();
+        }
+    });
+    dialog.add_controller(click);
     dialog.connect_closed(move |_| {
         let mountpoint = mountpoint.text().trim().to_owned();
         let size = cache.value();
