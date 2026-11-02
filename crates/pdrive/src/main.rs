@@ -9,7 +9,6 @@
 //!
 //! Set PDRIVE_VERBOSE=1 to log HTTP requests and SDK debug messages.
 
-use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
@@ -50,7 +49,7 @@ async fn selftest() -> Result<()> {
         }
     }
 
-    pdsdk::set_crypto_library_dir(Path::new(pdsdk::DEFAULT_LIB_DIR));
+    pdsdk::set_crypto_library_dir(&pdsdk::runtime_lib_dir());
     let client = DriveClient::create(Arc::new(OfflineHost), &format!("{}/", config::API_BASE_URL), ClientOptions::default()).await?;
     println!("client created");
     match client.my_files_folder().await {
