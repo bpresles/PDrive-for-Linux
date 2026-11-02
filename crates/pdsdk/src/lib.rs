@@ -62,6 +62,12 @@ pub fn set_crypto_library_dir(dir: &std::path::Path) {
 /// the directory the bindings were linked against).
 pub const DEFAULT_LIB_DIR: &str = env!("PDSDK_DEFAULT_LIB_DIR");
 
+/// Directory to load `libproton_crypto.so` from: `PDRIVE_LIB_DIR` when set (the AppImage mounts
+/// itself on a path unknown at build time), otherwise [`DEFAULT_LIB_DIR`].
+pub fn runtime_lib_dir() -> std::path::PathBuf {
+    std::env::var_os("PDRIVE_LIB_DIR").map_or_else(|| DEFAULT_LIB_DIR.into(), Into::into)
+}
+
 // --- Errors -----------------------------------------------------------------------------------
 
 #[derive(Debug, thiserror::Error)]

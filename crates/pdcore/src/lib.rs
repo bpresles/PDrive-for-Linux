@@ -9,7 +9,6 @@ pub mod host;
 pub mod keys;
 pub mod session;
 
-use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -59,7 +58,7 @@ pub async fn connect_with_api(verbose: bool) -> Result<(DriveClient, Arc<ApiClie
         }
     }
 
-    pdsdk::set_crypto_library_dir(Path::new(pdsdk::DEFAULT_LIB_DIR));
+    pdsdk::set_crypto_library_dir(&pdsdk::runtime_lib_dir());
     let host = Arc::new(AppHost { api: api.clone(), keys, verbose });
     let client = DriveClient::create(host, &format!("{}/", config::API_BASE_URL), ClientOptions::default()).await?;
     Ok((client, api))
