@@ -17,6 +17,7 @@ mod logs;
 mod settings;
 mod supervisor;
 mod tray;
+mod update;
 mod window;
 
 use std::cell::{Cell, OnceCell, RefCell};
@@ -28,7 +29,7 @@ use gtk::{gio, glib};
 
 use config::APP_ID;
 use daemon::Daemon;
-use pdi18n::tr;
+use pdi18n::{tr, tr_fmt};
 use supervisor::{Supervisor, program};
 use tray::{Command, Icon, TrayState};
 use window::{Status, StatusWindow, View};
@@ -44,6 +45,9 @@ struct App {
     window: RefCell<Option<Rc<StatusWindow>>>,
     tray: async_channel::Sender<TrayState>,
     last_tray: RefCell<Option<TrayState>>,
+    /// Newer release announced by the update check.
+    update: RefCell<Option<String>>,
+    checker: update::Checker,
     watcher_present: Cell<bool>,
     background: Cell<bool>,
     /// A command line was handled already.
@@ -122,7 +126,7 @@ fn main() -> glib::ExitCode {
 impl App {
     fn new(app: &adw::Application, terminate: async_channel::Receiver<()>) -> Rc<Self> {
         let (commands, command_receiver) = async_channel::unbounded();
-        let tray = tray::spawn(TrayState { icon: Icon::Offline, mounted: false, tooltip: Status::Starting.label() }, commands);
+        let tray = tray::spawn(TrayState { icon: Icon::Offline, mounted: false, tooltip: Status::Starting.label(), update: None }, commands);
 
         // The supervisor and the daemon client call back into `App`, which does not exist yet.
         let this: Rc<RefCell<Option<std::rc::Weak<App>>>> = Rc::new(RefCell::new(None));
@@ -148,6 +152,7 @@ impl App {
         })
         .expect("session bus");
 
+        let (checker, reports) = update::spawn();
         let me = Rc::new(App {
             app: app.clone(),
             supervisor,
@@ -155,6 +160,8 @@ impl App {
             window: RefCell::new(None),
             tray,
             last_tray: RefCell::new(None),
+            update: RefCell::new(None),
+            checker,
             watcher_present: Cell::new(true),
             background: Cell::new(false),
             launched: Cell::new(false),
@@ -169,6 +176,13 @@ impl App {
 
         let weak = Rc::downgrade(&me);
         glib::spawn_future_local(async move {
+            while let Ok(report) = reports.recv().await {
+                let Some(me) = weak.upgrade() else { break };
+                me.handle_update_report(report);
+            }
+        });
+        let weak = Rc::downgrade(&me);
+        glib::spawn_future_local(async move {
             while let Ok(command) = command_receiver.recv().await {
                 let Some(me) = weak.upgrade() else { break };
                 match command {
@@ -176,6 +190,8 @@ impl App {
                     Command::ShowWindow => me.show_window(),
                     Command::ToggleMount => me.toggle_mount(),
                     Command::Settings => me.show_settings(),
+                    Command::CheckUpdate => me.checker.check_now(),
+                    Command::OpenUpdate => window::open_uri(None, update::RELEASES_URL),
                     Command::Quit => me.quit(),
                 }
             }
@@ -315,13 +331,14 @@ impl App {
         if let Some(window) = self.window.borrow().as_ref() {
             window.update(&View { status, account: snapshot.account.clone(), used_space: snapshot.used_space, max_space: snapshot.max_space });
         }
+        let update = self.update.borrow().clone();
         let icon = match status {
             Status::Idle => Icon::Synced,
             Status::Syncing => Icon::Syncing,
             Status::Error => Icon::Error,
             _ => Icon::Offline,
         };
-        let state = TrayState { icon, mounted: matches!(status, Status::Idle | Status::Syncing | Status::Error), tooltip: status.label() };
+        let state = TrayState { icon, mounted: matches!(status, Status::Idle | Status::Syncing | Status::Error), tooltip: status.label(), update };
         if self.last_tray.borrow().as_ref() != Some(&state) {
             let _ = self.tray.try_send(state.clone());
             *self.last_tray.borrow_mut() = Some(state);
@@ -367,10 +384,16 @@ impl App {
     fn show_settings(self: &Rc<Self>) {
         let window = self.window();
         window.window.present();
-        let (restart, sign_out) = (Rc::downgrade(self), Rc::downgrade(self));
+        let (restart, sign_out, check) = (Rc::downgrade(self), Rc::downgrade(self), Rc::downgrade(self));
         settings::show(
             &window.window,
             &self.daemon.snapshot().account,
+            self.update.borrow().clone(),
+            Rc::new(move || {
+                if let Some(me) = check.upgrade() {
+                    me.checker.check_now();
+                }
+            }),
             Rc::new(move || {
                 if let Some(me) = restart.upgrade() {
                     me.restart_daemon();
@@ -450,8 +473,53 @@ impl App {
         dialog.present(Some(&self.window().window));
     }
 
+    /// Remembers the newest release (tray menu, settings) and answers the checks that need it.
+    fn handle_update_report(self: &Rc<Self>, report: update::Report) {
+        use update::{Kind, Outcome};
+        let manual = report.kind == Kind::Manual;
+        match report.outcome {
+            Outcome::Newer(version) => {
+                *self.update.borrow_mut() = Some(version.clone());
+                self.refresh();
+                if report.kind != Kind::Background {
+                    self.offer_update(&version);
+                }
+            }
+            Outcome::UpToDate => {
+                *self.update.borrow_mut() = None;
+                self.refresh();
+                if manual {
+                    self.alert(&tr("You already have the latest version"), "");
+                }
+            }
+            Outcome::Failed(error) => {
+                if manual {
+                    self.alert(&tr("Cannot check for updates"), &error);
+                }
+            }
+        }
+    }
+
+    /// "Ignore" or "Update" (opens the latest release page).
+    fn offer_update(self: &Rc<Self>, version: &str) {
+        let window = self.window();
+        window.window.present();
+        let dialog = adw::AlertDialog::new(Some(&tr_fmt("New version is available: v{}", &[version])), None);
+        dialog.add_responses(&[("ignore", &tr("Ignore")), ("update", &tr("Update"))]);
+        dialog.set_response_appearance("update", adw::ResponseAppearance::Suggested);
+        dialog.set_default_response(Some("update"));
+        dialog.set_close_response("ignore");
+        let parent = window.window.clone();
+        dialog.connect_response(None, move |_, response| {
+            if response == "update" {
+                window::open_uri(Some(parent.upcast_ref()), update::RELEASES_URL);
+            }
+        });
+        dialog.present(Some(&window.window));
+    }
+
     fn alert(self: &Rc<Self>, title: &str, body: &str) {
-        let dialog = adw::AlertDialog::new(Some(title), Some(body));
+        let dialog = adw::AlertDialog::new(Some(title), (!body.is_empty()).then_some(body));
         dialog.add_response("ok", &tr("OK"));
         dialog.present(Some(&self.window().window));
     }

@@ -106,14 +106,7 @@ impl StatusWindow {
         let open_folder = gtk::Button::builder().label(tr("Open folder")).action_name("app.open-folder").hexpand(true).build();
         open_folder.add_css_class("suggested-action");
         let view_online = gtk::Button::builder().label(tr("View online")).hexpand(true).build();
-        view_online.connect_clicked(|button| {
-            let window = button.root().and_downcast::<gtk::Window>();
-            gtk::UriLauncher::new(WEB_URL).launch(window.as_ref(), gtk::gio::Cancellable::NONE, |result| {
-                if let Err(e) = result {
-                    eprintln!("cannot open {WEB_URL}: {e}");
-                }
-            });
-        });
+        view_online.connect_clicked(|button| open_uri(button.root().and_downcast::<gtk::Window>().as_ref(), WEB_URL));
         let buttons = gtk::Box::builder().spacing(12).homogeneous(true).build();
         buttons.append(&open_folder);
         buttons.append(&view_online);
@@ -215,6 +208,15 @@ impl StatusWindow {
             self.list.append(&activity_row(entry));
         }
     }
+}
+
+pub fn open_uri(parent: Option<&gtk::Window>, uri: &str) {
+    let uri_owned = uri.to_owned();
+    gtk::UriLauncher::new(uri).launch(parent, gtk::gio::Cancellable::NONE, move |result| {
+        if let Err(e) = result {
+            eprintln!("cannot open {uri_owned}: {e}");
+        }
+    });
 }
 
 fn quota_text(used: u64, max: u64) -> String {

@@ -201,6 +201,11 @@ msgstr "Voir en ligne"
 msgid "Waiting for the browser…"
 msgstr "En attente du navigateur…"
 
+#: crates/pdrive-app/src/settings.rs
+#, rust-format
+msgid "New version available: v{}"
+msgstr "Nouvelle version disponible : v{}"
+
 #: crates/pdrive-app/src/window.rs:233
 #, rust-format
 msgid "{} used of {}"
@@ -329,3 +334,42 @@ msgstr "Libérer de l’espace"
 #: extension/pdrive-nautilus.c:337
 msgid "Remove the downloaded copy, keeping it in the cloud"
 msgstr "Supprimer la copie téléchargée, en la conservant dans le cloud"
+
+#: crates/pdrive-app/src/tray.rs
+#, rust-format
+msgid "Update available: v{}"
+msgstr "Mise à jour disponible : v{}"
+
+#: crates/pdrive-app/src/tray.rs
+msgid "Check for update…"
+msgstr "Rechercher une mise à jour…"
+
+#: crates/pdrive-app/src/main.rs
+msgid "You already have the latest version"
+msgstr "Vous avez déjà la dernière version"
+
+#: crates/pdrive-app/src/main.rs
+msgid "Cannot check for updates"
+msgstr "Impossible de rechercher les mises à jour"
+
+#: crates/pdrive-app/src/main.rs
+#, rust-format
+msgid "New version is available: v{}"
+msgstr "Une nouvelle version est disponible : v{}"
+
+#: crates/pdrive-app/src/main.rs
+msgid "Ignore"
+msgstr "Ignorer"
+
+#: crates/pdrive-app/src/main.rs
+msgid "Update"
+msgstr "Mettre à jour"
+
+#: crates/pdrive-app/src/settings.rs
+msgid "Updates"
+msgstr "Mises à jour"
+
+#: crates/pdrive-app/src/settings.rs
+#, rust-format
+msgid "Installed version: {}"
+msgstr "Version installée : {}"
