@@ -12,12 +12,14 @@ GTK_PLUGIN_URL=https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-
 GTK_PLUGIN_SHA256=b0f4cbc684a0103a9651f0955b635eaea0096b3a66c0f5a2c2aa337960375171
 LINUXDEPLOY_URL=https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-$APPIMAGE_ARCH.AppImage
 APPIMAGETOOL_URL=https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-$APPIMAGE_ARCH.AppImage
-# SHA-256 of the pinned tools, per architecture. aarch64: compute them from the downloads of the
-# URLs above once checked, and add them here (nothing is run unverified).
+# SHA-256 of the pinned tools, per architecture (computed from the downloads of the URLs above).
 case "$APPIMAGE_ARCH" in
     x86_64)
         LINUXDEPLOY_SHA256=c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d
         APPIMAGETOOL_SHA256=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0 ;;
+    aarch64)
+        LINUXDEPLOY_SHA256=620095110d693282b8ebeb244a95b5e911cf8f65f76c88b4b47d16ae6346fcff
+        APPIMAGETOOL_SHA256=f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158 ;;
     *) echo "No pinned SHA-256 for the AppImage tools on $APPIMAGE_ARCH: add them to $0" >&2; exit 1 ;;
 esac
 

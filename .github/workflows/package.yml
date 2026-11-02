@@ -1,0 +1,104 @@
+# Called by release.yml, once per architecture: RPM, DEB, AppImage (and Arch package on x64) from
+# the native archive of that architecture and the shared source archive. The four jobs run in
+# parallel on a runner of the target architecture.
+name: package
+on:
+  workflow_call:
+    inputs:
+      tag: { type: string, required: true }
+      version: { type: string, required: true }
+      native_id: { type: string, required: true }
+      arch: { description: x64 or arm64, type: string, required: true }
+      runner: { description: runner label of that architecture, type: string, required: true }
+permissions:
+  contents: read
+env:
+  VERSION: ${{ inputs.version }}
+  RID: linux-${{ inputs.arch }}
+  APPIMAGE_ARCH: ${{ inputs.arch == 'arm64' && 'aarch64' || 'x86_64' }}
+  NATIVE_ARCHIVE: pdrive-native-linux-${{ inputs.arch }}-${{ inputs.native_id }}.tar.xz
+jobs:
+  rpm:
+    runs-on: ${{ inputs.runner }}
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: "native-${{ inputs.arch }}", path: dist }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: source, path: dist }
+      - run: ln -s "$PWD/dist" /dist && bash scripts/container/build-rpm.sh
+      # The SRPM is the same on every architecture except for its native archive: x64 only.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rpm-${{ inputs.arch }}
+          path: |
+            dist/*.rpm
+            !dist/*-debuginfo-*.rpm
+            !dist/*-debugsource-*.rpm
+            ${{ inputs.arch != 'x64' && '!dist/*.src.rpm' || '' }}
+          if-no-files-found: error
+
+  deb:
+    runs-on: ${{ inputs.runner }}
+    # Debian 13 ships rustc 1.85 (< 1.92 required by the dependencies): the script falls back to rustup.
+    container: docker.io/library/debian:trixie
+    steps:
+      - run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: "native-${{ inputs.arch }}", path: dist }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: source, path: dist }
+      - run: ln -s "$PWD/dist" /dist && bash scripts/container/build-deb.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deb-${{ inputs.arch }}
+          path: dist/*.deb
+          if-no-files-found: error
+
+  # The official archlinux image is x86_64 only (Arch Linux ARM is a separate distribution with
+  # no official container image): no arm64 build; the PKGBUILD accepts aarch64 for Arch Linux ARM users.
+  arch:
+    if: ${{ inputs.arch == 'x64' }}
+    runs-on: ${{ inputs.runner }}
+    container: docker.io/library/archlinux:base-devel
+    steps:
+      - run: pacman -Syu --noconfirm --needed git
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: "native-${{ inputs.arch }}", path: dist }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: source, path: dist }
+      - run: ln -s "$PWD/dist" /dist && bash scripts/container/build-arch.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: arch-${{ inputs.arch }}
+          path: dist/*.pkg.tar.zst
+          if-no-files-found: error
+
+  appimage:
+    runs-on: ${{ inputs.runner }}
+    # Same Debian 13 base as the DEB (libadwaita >= 1.6): the AppImage needs glibc >= 2.41.
+    container: docker.io/library/debian:trixie
+    steps:
+      - run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: "native-${{ inputs.arch }}", path: dist }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: source, path: dist }
+      - run: ln -s "$PWD/dist" /dist && bash scripts/container/build-appimage.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: appimage-${{ inputs.arch }}
+          path: dist/*.AppImage
+          if-no-files-found: error

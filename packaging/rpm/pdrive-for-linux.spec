@@ -8,6 +8,12 @@
 # Revisions of the pinned Proton sources the native archive was built from.
 # Kept in sync with scripts/build-native.sh by scripts/check-version.sh.
 %global native_id b68d64b-fc2c108
+# Platform of the native archive.
+%ifarch aarch64
+%global native_rid linux-arm64
+%else
+%global native_rid linux-x64
+%endif
 
 # Names tied to the D-Bus / application identifiers (PLAN.md renames them together).
 %global app_id io.github.bpresles.PDrive.App
@@ -28,10 +34,10 @@ Summary:        Unofficial Proton Drive client for Linux (FUSE mount, Nautilus i
 License:        GPL-3.0-or-later AND MIT AND Apache-2.0 AND BSD-3-Clause AND ISC AND Zlib AND Unicode-3.0 AND Unlicense AND CDLA-Permissive-2.0 AND bzip2-1.0.6
 URL:            https://github.com/bpresles/PDrive-for-Linux
 Source0:        %{url}/releases/download/v%{version}/%{name}-%{version}.tar.xz
-Source1:        %{url}/releases/download/v%{version}/pdrive-native-linux-x64-%{native_id}.tar.xz
+Source1:        %{url}/releases/download/v%{version}/pdrive-native-%{native_rid}-%{native_id}.tar.xz
 
-# The native libraries are prebuilt for x86_64 only.
-ExclusiveArch:  x86_64
+# The native libraries are prebuilt for x86_64 and aarch64.
+ExclusiveArch:  x86_64 aarch64
 
 BuildRequires:  gcc
 BuildRequires:  make
@@ -69,15 +75,15 @@ Proton AG. It bundles the Proton Drive SDK and Proton cryptography libraries
 %setup -q
 # Native libraries, verified against the sums shipped in their archive.
 tar -xf %{SOURCE1}
-( cd pdrive-native-linux-x64-%{native_id} && sha256sum -c SHA256SUMS )
-mkdir -p native/linux-x64
-install -m0755 pdrive-native-linux-x64-%{native_id}/*.so native/linux-x64/
+( cd pdrive-native-%{native_rid}-%{native_id} && sha256sum -c SHA256SUMS )
+mkdir -p native/%{native_rid}
+install -m0755 pdrive-native-%{native_rid}-%{native_id}/*.so native/%{native_rid}/
 # One version everywhere: the tarball must carry the version of the spec.
 cargo_version=$(awk '/^\[workspace\.package\]/{f=1;next} /^\[/{f=0} f && /^version *=/{gsub(/"/,"",$3); print $3; exit}' Cargo.toml)
 test "$cargo_version" = "%{version}" || { echo "Cargo.toml version $cargo_version != spec %{version}" >&2; exit 1; }
 
 %build
-export PDSDK_LIB_DIR="$PWD/native/linux-x64"
+export PDSDK_LIB_DIR="$PWD/native/%{native_rid}"
 # Run-time location (rpath, and where the SDK loads libproton_crypto.so from).
 export PDSDK_RUNTIME_LIB_DIR=%{_libdir}/pdrive
 export RUSTFLAGS="%{build_rustflags}"
@@ -89,7 +95,7 @@ make -C extension LOCALEDIR=%{_datadir}/locale
 
 %install
 install -Dpm0755 target/release/pdrive target/release/pdrived target/release/pdrive-app -t %{buildroot}%{_bindir}
-install -Dpm0755 native/linux-x64/libproton_drive_sdk.so native/linux-x64/libproton_crypto.so -t %{buildroot}%{_libdir}/pdrive
+install -Dpm0755 native/%{native_rid}/libproton_drive_sdk.so native/%{native_rid}/libproton_crypto.so -t %{buildroot}%{_libdir}/pdrive
 
 make -C extension install DESTDIR=%{buildroot} LOCALEDIR=%{_datadir}/locale EXTENSION_DIR=%{_libdir}/nautilus/extensions-4
 
@@ -137,8 +143,8 @@ done
 %files -f pdrive.lang
 %license LICENSE THIRD_PARTY_NOTICES
 %license THIRD_PARTY_CRATES.txt
-%license pdrive-native-linux-x64-%{native_id}/LICENSE-*
-%doc pdrive-native-linux-x64-%{native_id}/SOURCES.txt
+%license pdrive-native-%{native_rid}-%{native_id}/LICENSE-*
+%doc pdrive-native-%{native_rid}-%{native_id}/SOURCES.txt
 %doc licenses/*.tsv
 %{_bindir}/pdrive
 %{_bindir}/pdrived

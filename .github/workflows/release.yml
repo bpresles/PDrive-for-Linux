@@ -1,5 +1,5 @@
 # Release on a version tag (v*), or on manual run (bump patch/minor/major): native libraries,
-# vendored source archive, RPM, DEB, Arch package, AppImage, SHA-256 sums, GitHub release, optional
+# vendored source archive, RPM, DEB, AppImage (x86_64 and aarch64) and Arch package (x86_64), SHA-256 sums, GitHub release, optional
 # COPR submission. The tag must match Cargo.toml (workspace.package.version),
 # packaging/rpm/pdrive-for-linux.spec, packaging/arch/PKGBUILD and debian/changelog, else the run
 # fails at the first job.
@@ -70,7 +70,7 @@ jobs:
     outputs:
       tag: ${{ steps.v.outputs.tag }}
       version: ${{ steps.v.outputs.version }}
-      native_archive: ${{ steps.v.outputs.native_archive }}
+      native_id: ${{ steps.v.outputs.native_id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -83,32 +83,21 @@ jobs:
           source scripts/lib-version.sh
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "native_archive=$NATIVE_ARCHIVE" >> "$GITHUB_OUTPUT"
+          echo "native_id=$NATIVE_ID" >> "$GITHUB_OUTPUT"
 
-  # .NET 10 NativeAOT + Rust at the revisions pinned in scripts/build-native.sh.
-  native:
+  # The native libraries cannot be cross-compiled (NativeAOT): one build per architecture, on a
+  # runner of that architecture, in parallel. Each architecture packages as soon as its own
+  # libraries are ready (it does not wait for the other one). The source archive is architecture
+  # independent: built once, in parallel with the native builds.
+  native-x64:
     needs: check
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.check.outputs.tag }}
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          dotnet-version: 10.0.x
-      - name: NativeAOT prerequisites
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang zlib1g-dev
-      - name: Build native libraries
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup target add x86_64-unknown-linux-gnu
-          scripts/build-native.sh
-      - run: scripts/package-native.sh
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: native
-          path: dist/pdrive-native-linux-x64-*
-          if-no-files-found: error
+    uses: ./.github/workflows/native.yml
+    with: { tag: "${{ needs.check.outputs.tag }}", arch: x64, runner: ubuntu-24.04 }
+
+  native-arm64:
+    needs: check
+    uses: ./.github/workflows/native.yml
+    with: { tag: "${{ needs.check.outputs.tag }}", arch: arm64, runner: ubuntu-24.04-arm }
 
   # Project files + vendored Rust crates (see scripts/make-source-tarball.sh).
   source:
@@ -127,104 +116,28 @@ jobs:
           path: dist/pdrive-for-linux-*
           if-no-files-found: error
 
-  rpm:
-    needs: [check, native, source]
-    runs-on: ubuntu-24.04
-    container: registry.fedoraproject.org/fedora:44
-    env:
-      VERSION: ${{ needs.check.outputs.version }}
-      NATIVE_ARCHIVE: ${{ needs.check.outputs.native_archive }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.check.outputs.tag }}
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with: { name: native, path: dist }
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with: { name: source, path: dist }
-      - run: ln -s "$PWD/dist" /dist && bash scripts/container/build-rpm.sh
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: rpm
-          path: |
-            dist/*.rpm
-            !dist/*-debuginfo-*.rpm
-            !dist/*-debugsource-*.rpm
-          if-no-files-found: error
+  package-x64:
+    needs: [check, native-x64, source]
+    uses: ./.github/workflows/package.yml
+    with:
+      tag: ${{ needs.check.outputs.tag }}
+      version: ${{ needs.check.outputs.version }}
+      native_id: ${{ needs.check.outputs.native_id }}
+      arch: x64
+      runner: ubuntu-24.04
 
-  deb:
-    needs: [check, native, source]
-    runs-on: ubuntu-24.04
-    # Debian 13 ships rustc 1.85 (< 1.92 required by the dependencies): the script falls back to rustup.
-    container: docker.io/library/debian:trixie
-    env:
-      VERSION: ${{ needs.check.outputs.version }}
-      NATIVE_ARCHIVE: ${{ needs.check.outputs.native_archive }}
-    steps:
-      - run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.check.outputs.tag }}
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with: { name: native, path: dist }
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with: { name: source, path: dist }
-      - run: ln -s "$PWD/dist" /dist && bash scripts/container/build-deb.sh
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: deb
-          path: dist/*.deb
-          if-no-files-found: error
-
-  arch:
-    needs: [check, native, source]
-    runs-on: ubuntu-24.04
-    container: docker.io/library/archlinux:base-devel
-    env:
-      VERSION: ${{ needs.check.outputs.version }}
-      NATIVE_ARCHIVE: ${{ needs.check.outputs.native_archive }}
-    steps:
-      - run: pacman -Syu --noconfirm --needed git
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.check.outputs.tag }}
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with: { name: native, path: dist }
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with: { name: source, path: dist }
-      - run: ln -s "$PWD/dist" /dist && bash scripts/container/build-arch.sh
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: arch
-          path: dist/*.pkg.tar.zst
-          if-no-files-found: error
-
-  appimage:
-    needs: [check, native, source]
-    runs-on: ubuntu-24.04
-    # Same Debian 13 base as the DEB (libadwaita >= 1.6): the AppImage needs glibc >= 2.41.
-    container: docker.io/library/debian:trixie
-    env:
-      VERSION: ${{ needs.check.outputs.version }}
-      NATIVE_ARCHIVE: ${{ needs.check.outputs.native_archive }}
-    steps:
-      - run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.check.outputs.tag }}
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with: { name: native, path: dist }
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with: { name: source, path: dist }
-      - run: ln -s "$PWD/dist" /dist && bash scripts/container/build-appimage.sh
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: appimage
-          path: dist/*.AppImage
-          if-no-files-found: error
+  package-arm64:
+    needs: [check, native-arm64, source]
+    uses: ./.github/workflows/package.yml
+    with:
+      tag: ${{ needs.check.outputs.tag }}
+      version: ${{ needs.check.outputs.version }}
+      native_id: ${{ needs.check.outputs.native_id }}
+      arch: arm64
+      runner: ubuntu-24.04-arm
 
   release:
-    needs: [check, native, source, rpm, deb, arch, appimage]
+    needs: [check, source, package-x64, package-arm64]
     runs-on: ubuntu-24.04
     permissions:
       contents: write # create the release or upload to it
@@ -262,7 +175,7 @@ jobs:
   # Not run when the release job succeeded (the draft release then points at the tag); a later
   # copr failure does not undo anything.
   rollback:
-    needs: [bump, check, native, source, rpm, deb, arch, appimage, release]
+    needs: [bump, check, native-x64, native-arm64, source, package-x64, package-arm64, release]
     if: ${{ always() && needs.bump.result == 'success' && needs.release.result != 'success' }}
     runs-on: ubuntu-24.04
     permissions:
@@ -300,7 +213,7 @@ jobs:
     container: registry.fedoraproject.org/fedora:44
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with: { name: rpm, path: rpm }
+        with: { name: rpm-x64, path: rpm }
       - name: Submit the SRPM
         env:
           COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
