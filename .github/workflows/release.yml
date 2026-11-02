@@ -1,6 +1,7 @@
-# Release on a version tag (v*): native libraries, vendored source archive, RPM, DEB, SHA-256 sums,
+# Release on a version tag (v*): native libraries, vendored source archive, RPM, DEB, Arch package,
+# AppImage, SHA-256 sums,
 # GitHub release, optional COPR submission. The tag must match Cargo.toml (workspace.package.version),
-# packaging/rpm/pdrive-for-linux.spec and debian/changelog, else the run fails at the first job.
+# packaging/rpm/pdrive-for-linux.spec, packaging/arch/PKGBUILD and debian/changelog, else the run fails at the first job.
 name: release
 
 on:
@@ -108,8 +109,51 @@ jobs:
           path: dist/*.deb
           if-no-files-found: error
 
+  arch:
+    needs: [check, native, source]
+    runs-on: ubuntu-24.04
+    container: docker.io/library/archlinux:base-devel
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      NATIVE_ARCHIVE: ${{ needs.check.outputs.native_archive }}
+    steps:
+      - run: pacman -Syu --noconfirm --needed git
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: native, path: dist }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: source, path: dist }
+      - run: ln -s "$PWD/dist" /dist && bash scripts/container/build-arch.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: arch
+          path: dist/*.pkg.tar.zst
+          if-no-files-found: error
+
+  appimage:
+    needs: [check, native, source]
+    runs-on: ubuntu-24.04
+    # Same Debian 13 base as the DEB (libadwaita >= 1.6): the AppImage needs glibc >= 2.41.
+    container: docker.io/library/debian:trixie
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      NATIVE_ARCHIVE: ${{ needs.check.outputs.native_archive }}
+    steps:
+      - run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: native, path: dist }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: source, path: dist }
+      - run: ln -s "$PWD/dist" /dist && bash scripts/container/build-appimage.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: appimage
+          path: dist/*.AppImage
+          if-no-files-found: error
+
   release:
-    needs: [check, native, source, rpm, deb]
+    needs: [check, native, source, rpm, deb, arch, appimage]
     runs-on: ubuntu-24.04
     permissions:
       contents: write # create the release or upload to it
