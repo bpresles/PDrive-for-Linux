@@ -10,7 +10,7 @@ use ksni::menu::{MenuItem, StandardItem};
 use ksni::{Category, ToolTip, TrayMethods};
 
 use crate::config::APP_ID;
-use pdi18n::tr;
+use pdi18n::{tr, tr_fmt};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Icon {
@@ -37,6 +37,8 @@ pub enum Command {
     ShowWindow,
     ToggleMount,
     Settings,
+    CheckUpdate,
+    OpenUpdate,
     Quit,
 }
 
@@ -46,6 +48,8 @@ pub struct TrayState {
     /// Whether the menu offers "Unmount" rather than "Mount".
     pub mounted: bool,
     pub tooltip: String,
+    /// Newer release found by the update check (without the "v").
+    pub update: Option<String>,
 }
 
 struct Tray {
@@ -94,12 +98,17 @@ impl ksni::Tray for Tray {
 
     fn menu(&self) -> Vec<MenuItem<Self>> {
         let mount = if self.state.mounted { tr("Unmount") } else { tr("Mount") };
+        let update = match &self.state.update {
+            Some(version) => self.item(tr_fmt("Update available: v{}", &[version.as_str()]), "software-update-available-symbolic", Command::OpenUpdate),
+            None => self.item(tr("Check for update…"), "view-refresh-symbolic", Command::CheckUpdate),
+        };
         vec![
             self.item(tr("Open folder"), "folder-open-symbolic", Command::OpenFolder),
             self.item(tr("Show status window"), "view-list-symbolic", Command::ShowWindow),
             MenuItem::Separator,
             self.item(mount, "drive-harddisk-symbolic", Command::ToggleMount),
             self.item(tr("Settings"), "preferences-system-symbolic", Command::Settings),
+            update,
             MenuItem::Separator,
             self.item(tr("Quit"), "application-exit-symbolic", Command::Quit),
         ]

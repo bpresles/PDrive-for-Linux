@@ -2774,6 +2774,8 @@ dependencies = [
  "libadwaita",
  "libc",
  "pdi18n",
+ "reqwest",
+ "serde",
  "tokio",
  "toml_edit",
 ]

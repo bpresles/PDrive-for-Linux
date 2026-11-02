@@ -7,11 +7,22 @@ use std::rc::Rc;
 use adw::prelude::*;
 
 use crate::config::{self, Settings};
-use pdi18n::tr;
+use crate::update::RELEASES_URL;
+use crate::window::open_uri;
+use pdi18n::{tr, tr_fmt};
 
 /// Shows the settings. The mount point and the cache size are saved when the dialog closes, and
-/// `restart_daemon` then applies them; `sign_out` is called after the user confirms.
-pub fn show(parent: &impl IsA<gtk::Widget>, account: &str, restart_daemon: Rc<dyn Fn()>, sign_out: Rc<dyn Fn()>) {
+/// `restart_daemon` then applies them; `sign_out` is called after the user confirms. `update` is the
+/// newer release already found in the background, if any; `check_update` asks for a check, whose
+/// answer is a popup.
+pub fn show(
+    parent: &impl IsA<gtk::Widget>,
+    account: &str,
+    update: Option<String>,
+    check_update: Rc<dyn Fn()>,
+    restart_daemon: Rc<dyn Fn()>,
+    sign_out: Rc<dyn Fn()>,
+) {
     let current = config::load();
     let dialog = adw::PreferencesDialog::builder().title(tr("Settings")).build();
     let page = adw::PreferencesPage::new();
@@ -47,6 +58,24 @@ pub fn show(parent: &impl IsA<gtk::Widget>, account: &str, restart_daemon: Rc<dy
     });
     startup.add(&show_window);
     page.add(&startup);
+
+    let updates = adw::PreferencesGroup::new();
+    let row = adw::ActionRow::builder().title(tr("Updates")).subtitle(tr_fmt("Installed version: {}", &[env!("CARGO_PKG_VERSION")])).build();
+    let button = gtk::Button::builder().valign(gtk::Align::Center).build();
+    match update {
+        Some(version) => {
+            button.set_label(&tr_fmt("New version available: v{}", &[&version]));
+            button.add_css_class("suggested-action");
+            button.connect_clicked(|button| open_uri(button.root().and_downcast::<gtk::Window>().as_ref(), RELEASES_URL));
+        }
+        None => {
+            button.set_label(&tr("Check for update…"));
+            button.connect_clicked(move |_| check_update());
+        }
+    }
+    row.add_suffix(&button);
+    updates.add(&row);
+    page.add(&updates);
 
     let account_group = adw::PreferencesGroup::builder().title(tr("Account")).build();
     let row = adw::ActionRow::builder().title(if account.is_empty() { "Proton Drive".to_owned() } else { account.to_owned() }).use_markup(false).build();
