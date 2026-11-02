@@ -6,7 +6,11 @@ fn main() {
     // Directory holding libproton_drive_sdk.so and libproton_crypto.so (see scripts/build-native.sh).
     let lib_dir = match std::env::var("PDSDK_LIB_DIR") {
         Ok(dir) => PathBuf::from(dir),
-        Err(_) => PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../native/linux-x64"),
+        Err(_) => {
+            // Same layout as scripts/build-native.sh: native/linux-<x64|arm64>.
+            let arch = if std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("aarch64") { "arm64" } else { "x64" };
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../native").join(format!("linux-{arch}"))
+        }
     };
     let lib_dir = lib_dir.canonicalize().unwrap_or(lib_dir);
     // Where the libraries are found at run time (rpath of the binaries, and the path given to
