@@ -15,7 +15,7 @@ mkdir -p "$D" dist
 
 git ls-files -co --exclude-standard -z | while IFS= read -r -d '' f; do
     [[ -f "$f" ]] && echo "$f"
-done | grep -v '^\(third_party\|native/linux-x64\|dist\)/' | tar -T - -cf - | tar -C "$D" -xf -
+done | grep -v '^\(third_party\|native/linux-[a-z0-9]*\|dist\)/' | tar -T - -cf - | tar -C "$D" -xf -
 
 mkdir -p "$D/.cargo"
 cargo vendor --locked "$D/vendor" 2>/dev/null | sed "s#^directory = .*#directory = \"vendor\"#" > "$D/.cargo/config.toml"

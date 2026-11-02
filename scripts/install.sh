@@ -22,12 +22,15 @@ UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 UNIT="pdrive.service"
 
-if [[ ! -f "$ROOT/native/linux-x64/libproton_drive_sdk.so" ]]; then
+# Native libraries built for this machine by build-native.sh (NATIVE_DIR, see lib-arch.sh).
+source "$ROOT/scripts/lib-arch.sh"
+
+if [[ ! -f "$NATIVE_DIR/libproton_drive_sdk.so" ]]; then
     "$ROOT/scripts/build-native.sh"
 fi
 
 mkdir -p "$LIB_DIR" "$BIN_DIR" "$UNIT_DIR" "$APP_DIR"
-install -m 0644 "$ROOT/native/linux-x64/"lib{proton_drive_sdk,proton_crypto}.so "$LIB_DIR/"
+install -m 0644 "$NATIVE_DIR/"lib{proton_drive_sdk,proton_crypto}.so "$LIB_DIR/"
 
 # The binaries find the libraries through an rpath to the installed directory.
 PDSDK_LIB_DIR="$LIB_DIR" cargo build --release --manifest-path "$ROOT/Cargo.toml" -p pdrived -p pdrive -p pdrive-app

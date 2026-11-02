@@ -12,13 +12,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 THIRD_PARTY="$ROOT/third_party"
 
-case "${PDSDK_ARCH:-$(uname -m)}" in
-    x86_64 | amd64 | x64) ARCH="x64" RUST_TARGET="x86_64-unknown-linux-gnu" ;;
-    aarch64 | arm64) ARCH="arm64" RUST_TARGET="aarch64-unknown-linux-gnu" ;;
-    *) echo "Unsupported architecture: ${PDSDK_ARCH:-$(uname -m)}" >&2; exit 1 ;;
-esac
-RID="linux-$ARCH"
-OUT="$ROOT/native/$RID"
+source "$ROOT/scripts/lib-arch.sh"
+OUT="$NATIVE_DIR"
 
 SDK_REPO="https://github.com/ProtonDriveApps/sdk.git"
 SDK_REV="b68d64bd9f9c1f24be521c8b423c26f5dca1c681"

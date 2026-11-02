@@ -19,6 +19,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/lib-arch.sh"
 CFG="$ROOT/scripts/audit-licenses"
 OUT="$ROOT/licenses"
 SDK_ASSETS="$ROOT/third_party/sdk/client/cs/src/Proton.Drive.Sdk.CExports/obj/project.assets.json"
@@ -57,10 +58,10 @@ fi
 if [[ -f "$SDK_ASSETS" ]]; then
     {
         printf 'package\tversion\tlicence (nuspec)\tcopyright (nuspec)\trole\n'
-        # role: "linked" = has a runtime asset in the linux-x64 closure (compiled into the library),
+        # role: "linked" = has a runtime asset in the $RID closure (compiled into the library),
         # or is the NativeAOT runtime pack; "build" = restored for the build only.
-        jq -r '
-          (.targets["net10.0/linux-x64"] | to_entries[] | select(.value.type == "package")
+        jq -r --arg rid "$RID" '
+          (.targets["net10.0/" + $rid] | to_entries[] | select(.value.type == "package")
             | [.key, (if ((.value.runtime // {}) | length) > 0 then "linked" else "build" end)] | @tsv),
           (.project.frameworks[].downloadDependencies[] | [.name + "/" + (.version | gsub("[\\[\\] ]"; "") | split(",")[0]),
             (if (.name | test("NativeAOT")) then "linked" else "build" end)] | @tsv)' "$SDK_ASSETS" \

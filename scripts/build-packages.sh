@@ -2,7 +2,7 @@
 # Builds the packages locally, in a container (podman, else docker), without network inside
 # the package build itself (vendored crates + prebuilt native libraries):
 #   scripts/build-packages.sh [rpm|deb|arch|appimage]      (default: all four)
-# Prerequisites (outside the container): native/linux-x64/*.so (scripts/build-native.sh, or
+# Prerequisites (outside the container): native/<linux-x64|linux-arm64>/*.so (for this machine, see lib-arch.sh) (scripts/build-native.sh, or
 # the native archive of a release unpacked there), cargo, jq and git for `cargo vendor`.
 # Results in dist/. Nothing is installed on the host.
 set -euo pipefail
@@ -22,7 +22,7 @@ ENGINE="$(command -v podman || command -v docker || true)"
 "$ROOT/scripts/make-source-tarball.sh"
 
 run() { # run <image> <script-in-container>
-    "$ENGINE" run --rm -v "$ROOT/dist:/dist:Z" -v "$ROOT/scripts/container:/ci:ro,Z" -e VERSION="$VERSION" -e NATIVE_ARCHIVE="$NATIVE_ARCHIVE" "$1" bash -euxo pipefail "/ci/$2"
+    "$ENGINE" run --rm -v "$ROOT/dist:/dist:Z" -v "$ROOT/scripts/container:/ci:ro,Z" -e VERSION="$VERSION" -e NATIVE_ARCHIVE="$NATIVE_ARCHIVE" -e RID="$RID" -e APPIMAGE_ARCH="$APPIMAGE_ARCH" "$1" bash -euxo pipefail "/ci/$2"
 }
 
 case "$WHAT" in
