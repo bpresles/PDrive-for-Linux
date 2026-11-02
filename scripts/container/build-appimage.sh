@@ -6,12 +6,20 @@
 # Tools are pinned by version and SHA-256 and run with APPIMAGE_EXTRACT_AND_RUN (no FUSE here).
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
-LINUXDEPLOY_URL=https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage
-LINUXDEPLOY_SHA256=c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d
+# RID and APPIMAGE_ARCH (x86_64|aarch64) come from scripts/lib-arch.sh through build-packages.sh.
+: "${RID:?}" "${APPIMAGE_ARCH:?}"
 GTK_PLUGIN_URL=https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/7a3fbc31a9e5075073ff8790f26effbac5f84453/linuxdeploy-plugin-gtk.sh
 GTK_PLUGIN_SHA256=b0f4cbc684a0103a9651f0955b635eaea0096b3a66c0f5a2c2aa337960375171
-APPIMAGETOOL_URL=https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
-APPIMAGETOOL_SHA256=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+LINUXDEPLOY_URL=https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-$APPIMAGE_ARCH.AppImage
+APPIMAGETOOL_URL=https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-$APPIMAGE_ARCH.AppImage
+# SHA-256 of the pinned tools, per architecture. aarch64: compute them from the downloads of the
+# URLs above once checked, and add them here (nothing is run unverified).
+case "$APPIMAGE_ARCH" in
+    x86_64)
+        LINUXDEPLOY_SHA256=c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d
+        APPIMAGETOOL_SHA256=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0 ;;
+    *) echo "No pinned SHA-256 for the AppImage tools on $APPIMAGE_ARCH: add them to $0" >&2; exit 1 ;;
+esac
 
 apt-get update
 apt-get install -y --no-install-recommends build-essential gettext desktop-file-utils pkg-config \
@@ -34,17 +42,17 @@ fetch() { # fetch <url> <sha256> <file>
 fetch "$LINUXDEPLOY_URL" "$LINUXDEPLOY_SHA256" linuxdeploy
 fetch "$GTK_PLUGIN_URL" "$GTK_PLUGIN_SHA256" linuxdeploy-plugin-gtk.sh
 fetch "$APPIMAGETOOL_URL" "$APPIMAGETOOL_SHA256" appimagetool
-export APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 PATH="$W/tools:$PATH"
+export APPIMAGE_EXTRACT_AND_RUN=1 ARCH="$APPIMAGE_ARCH" PATH="$W/tools:$PATH"
 
 tar -xJf "/dist/pdrive-for-linux-$VERSION.tar.xz" -C "$W"
 S="$W/pdrive-for-linux-$VERSION"
 tar -xJf "/dist/$NATIVE_ARCHIVE" -C "$W"
-mkdir -p "$S/native/linux-x64"
-cp "$W"/pdrive-native-linux-x64-*/* "$S/native/linux-x64/"
-cd "$S/native/linux-x64" && sha256sum -c SHA256SUMS
+mkdir -p "$S/native/$RID"
+cp "$W"/pdrive-native-"$RID"-*/* "$S/native/$RID/"
+cd "$S/native/$RID" && sha256sum -c SHA256SUMS
 cd "$S"
 
-export PDSDK_LIB_DIR="$S/native/linux-x64"
+export PDSDK_LIB_DIR="$S/native/$RID"
 cargo build --release --frozen --offline -p pdrived -p pdrive -p pdrive-app
 
 A="$W/AppDir"
@@ -56,7 +64,7 @@ while read -r lang; do
     msgfmt --check -o "$A/usr/share/locale/$lang/LC_MESSAGES/pdrive.mo" "po/$lang.po"
 done < po/LINGUAS
 install -d "$A/usr/share/doc/pdrive-for-linux"
-cp THIRD_PARTY_NOTICES LICENSE THIRD_PARTY_CRATES.txt native/linux-x64/LICENSE-* licenses/*.tsv "$A/usr/share/doc/pdrive-for-linux/"
+cp THIRD_PARTY_NOTICES LICENSE THIRD_PARTY_CRATES.txt native/$RID/LICENSE-* licenses/*.tsv "$A/usr/share/doc/pdrive-for-linux/"
 
 APP_ID=io.github.bpresles.PDrive.App
 # The libraries are found through the rpath that linuxdeploy rewrites relative to the executables,
@@ -79,4 +87,4 @@ for b in pdrive pdrived pdrive-app; do
     ! ldd "$A/usr/bin/$b" | grep -F 'not found' || { echo "$b has unresolved libraries" >&2; exit 1; }
 done
 
-appimagetool --no-appstream "$A" "/dist/PDrive-for-Linux-$VERSION-x86_64.AppImage"
+appimagetool --no-appstream "$A" "/dist/PDrive-for-Linux-$VERSION-$APPIMAGE_ARCH.AppImage"
