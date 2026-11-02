@@ -5,13 +5,20 @@
 #   - libproton_crypto.so    (Proton's Rust OpenPGP/SRP FFI, from ProtonDriveApps/dotnet-crypto)
 #   - libproton_drive_sdk.so (Proton Drive C# SDK compiled with NativeAOT, from ProtonDriveApps/sdk)
 #
-# Outputs go to ./native/linux-x64. Sources are cloned into ./third_party at pinned commits.
+# The platform is detected from the machine running the script (x86_64 or aarch64); set
+# PDSDK_ARCH=x64|arm64 to override. Outputs go to ./native/linux-<x64|arm64>. Sources are cloned into ./third_party at pinned commits.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 THIRD_PARTY="$ROOT/third_party"
-OUT="$ROOT/native/linux-x64"
-RID="linux-x64"
+
+case "${PDSDK_ARCH:-$(uname -m)}" in
+    x86_64 | amd64 | x64) ARCH="x64" RUST_TARGET="x86_64-unknown-linux-gnu" ;;
+    aarch64 | arm64) ARCH="arm64" RUST_TARGET="aarch64-unknown-linux-gnu" ;;
+    *) echo "Unsupported architecture: ${PDSDK_ARCH:-$(uname -m)}" >&2; exit 1 ;;
+esac
+RID="linux-$ARCH"
+OUT="$ROOT/native/$RID"
 
 SDK_REPO="https://github.com/ProtonDriveApps/sdk.git"
 SDK_REV="b68d64bd9f9c1f24be521c8b423c26f5dca1c681"
@@ -46,9 +53,9 @@ FEED="$THIRD_PARTY/nuget-local"
 echo "==> Building libproton_crypto ($RID)"
 CRYPTO_FFI="$THIRD_PARTY/dotnet-crypto/src/rust/proton-crypto-ffi"
 # Run from the crate directory so Cargo picks up its .cargo/config.toml (declares the "proton" registry).
-(cd "$CRYPTO_FFI" && cargo build --release --target x86_64-unknown-linux-gnu)
+(cd "$CRYPTO_FFI" && cargo build --release --target "$RUST_TARGET")
 mkdir -p "$THIRD_PARTY/dotnet-crypto/bin/runtimes/$RID/native"
-cp "$CRYPTO_FFI/target/x86_64-unknown-linux-gnu/release/libproton_crypto."{a,so} \
+cp "$CRYPTO_FFI/target/$RUST_TARGET/release/libproton_crypto."{a,so} \
     "$THIRD_PARTY/dotnet-crypto/bin/runtimes/$RID/native/"
 
 echo "==> Packing Proton.Cryptography $CRYPTO_VERSION into the local feed"
