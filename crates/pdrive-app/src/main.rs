@@ -489,42 +489,43 @@ impl App {
                 *self.update.borrow_mut() = None;
                 self.refresh();
                 if manual {
-                    self.alert(&tr("You already have the latest version"), "");
+                    self.notify(&tr("You already have the latest version"), "");
                 }
             }
             Outcome::Failed(error) => {
                 if manual {
-                    self.alert(&tr("Cannot check for updates"), &error);
+                    self.notify(&tr("Cannot check for updates"), &error);
                 }
             }
         }
     }
 
-    /// "Ignore" or "Update" (opens the latest release page).
+    /// "Ignore" or "Update" (opens the latest release page). Own window: the status window is not
+    /// opened for it.
     fn offer_update(self: &Rc<Self>, version: &str) {
-        let window = self.window();
-        window.window.present();
-        let dialog = adw::AlertDialog::new(Some(&tr_fmt("New version is available: v{}", &[version])), None);
-        dialog.add_responses(&[("ignore", &tr("Ignore")), ("update", &tr("Update"))]);
-        dialog.set_response_appearance("update", adw::ResponseAppearance::Suggested);
-        dialog.set_default_response(Some("update"));
-        dialog.set_close_response("ignore");
-        let parent = window.window.clone();
-        dialog.connect_response(None, move |_, response| {
-            if response == "update" {
-                window::open_uri(Some(parent.upcast_ref()), update::RELEASES_URL);
+        let dialog = gtk::AlertDialog::builder()
+            .message(tr_fmt("New version is available: v{}", &[version]))
+            .buttons([tr("Ignore"), tr("Update")])
+            .cancel_button(0)
+            .default_button(1)
+            .build();
+        dialog.choose(gtk::Window::NONE, gtk::gio::Cancellable::NONE, |response| {
+            if response == Ok(1) {
+                window::open_uri(None, update::RELEASES_URL);
             }
         });
-        dialog.present(Some(&window.window));
+    }
+
+    /// Result of a manual check that needs no action, in its own window (see `offer_update`).
+    fn notify(self: &Rc<Self>, title: &str, body: &str) {
+        let dialog = gtk::AlertDialog::builder().message(title).detail(body).buttons([tr("OK")]).build();
+        dialog.choose(gtk::Window::NONE, gtk::gio::Cancellable::NONE, |_| {});
     }
 
     fn alert(self: &Rc<Self>, title: &str, body: &str) {
         let dialog = adw::AlertDialog::new(Some(title), (!body.is_empty()).then_some(body));
         dialog.add_response("ok", &tr("OK"));
-        // The dialog is attached to the status window: show it, or a closed window hides the dialog.
-        let window = self.window();
-        window.window.present();
-        dialog.present(Some(&window.window));
+        dialog.present(Some(&self.window().window));
     }
 
     /// Stops the daemon cleanly, then ends the application.
