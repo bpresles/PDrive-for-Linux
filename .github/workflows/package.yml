@@ -1,4 +1,4 @@
-# Called by release.yml, once per architecture: RPM, DEB, AppImage (and Arch package on x64) from
+# Called by release.yml, once per architecture: RPM, DEB, AppImage and Arch package from
 # the native archive of that architecture and the shared source archive. The four jobs run in
 # parallel on a runner of the target architecture.
 name: package
@@ -61,8 +61,6 @@ jobs:
           path: dist/*.deb
           if-no-files-found: error
 
-  # The official archlinux image is x86_64 only (Arch Linux ARM is a separate distribution with
-  # no official container image): no arm64 build; the PKGBUILD accepts aarch64 for Arch Linux ARM users.
   arch:
     if: ${{ inputs.arch == 'x64' }}
     runs-on: ${{ inputs.runner }}
@@ -77,6 +75,51 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: { name: source, path: dist }
       - run: ln -s "$PWD/dist" /dist && bash scripts/container/build-arch.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: arch-${{ inputs.arch }}
+          path: dist/*.pkg.tar.zst
+          if-no-files-found: error
+
+  # The official archlinux image is x86_64 only. On arm64 the build runs in a container made from
+  # the Arch Linux ARM root filesystem (os.archlinuxarm.org), whose signature is checked against the
+  # build key pinned in packaging/arch/ (fingerprint below).
+  arch-arm64:
+    if: ${{ inputs.arch == 'arm64' }}
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: "native-${{ inputs.arch }}", path: dist }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: source, path: dist }
+      - name: Arch Linux ARM container image
+        env:
+          ALARM_KEY_FPR: 68B3537F39A313B3E574D06777193F152BDBE6A6
+        run: |
+          url=http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
+          work=$(mktemp -d)
+          curl --proto '=https,http' -fsSL --retry 3 -o "$work/rootfs.tar.gz" "$url"
+          curl --proto '=https,http' -fsSL --retry 3 -o "$work/rootfs.tar.gz.sig" "$url.sig"
+          export GNUPGHOME="$work/gnupg"; install -d -m 700 "$GNUPGHOME"
+          gpg --batch --import packaging/arch/archlinuxarm-build-key.asc
+          # The pinned key must be the expected one, and the signature must come from it.
+          fprs=$(gpg --batch --with-colons --fingerprint | awk -F: '$1=="fpr"{print $10}')
+          grep -qx "$ALARM_KEY_FPR" <<<"$fprs"
+          status=$(gpg --batch --status-fd 1 --verify "$work/rootfs.tar.gz.sig" "$work/rootfs.tar.gz" 2>/dev/null)
+          grep -q "VALIDSIG $ALARM_KEY_FPR " <<<"$status"
+          docker import "$work/rootfs.tar.gz" alarm
+          rm -rf "$work"
+      # The sandbox of pacman (Landlock) is not available in a container.
+      - name: Build
+        run: |
+          docker run --rm -v "$PWD":/src -v "$PWD/dist":/dist -w /src -e VERSION -e NATIVE_ARCHIVE alarm bash -c '
+            set -euo pipefail
+            sed -i "/^\[options\]/a DisableSandbox" /etc/pacman.conf
+            pacman-key --init && pacman-key --populate archlinuxarm
+            bash scripts/container/build-arch.sh'
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: arch-${{ inputs.arch }}

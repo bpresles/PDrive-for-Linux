@@ -1,5 +1,5 @@
 # Release on a version tag (v*), or on manual run (bump patch/minor/major): native libraries,
-# vendored source archive, RPM, DEB, AppImage (x86_64 and aarch64) and Arch package (x86_64), SHA-256 sums, GitHub release, optional
+# vendored source archive, RPM, DEB, AppImage and Arch package (x86_64 and aarch64), SHA-256 sums, GitHub release, optional
 # COPR submission. The tag must match Cargo.toml (workspace.package.version),
 # packaging/rpm/pdrive-for-linux.spec, packaging/arch/PKGBUILD and debian/changelog, else the run
 # fails at the first job.
