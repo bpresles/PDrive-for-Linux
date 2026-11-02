@@ -19,7 +19,7 @@ Homepage: https://github.com/bpresles/PDrive-for-Linux
 Rules-Requires-Root: no
 
 Package: pdrive-for-linux
-Architecture: amd64
+Architecture: amd64 arm64
 Depends: ${shlibs:Depends}, ${misc:Depends},
  fuse3,
  libnautilus-extension4,

@@ -9,6 +9,8 @@
 # Revisions of the pinned Proton sources the native archive was built from.
 # Kept in sync with scripts/build-native.sh by scripts/check-version.sh.
 _native_id=b68d64b-fc2c108
+# Platform of the native archive.
+case "$CARCH" in aarch64) _rid=linux-arm64 ;; *) _rid=linux-x64 ;; esac
 
 # Names tied to the D-Bus / application identifiers (PLAN.md renames them together).
 _app_id=io.github.bpresles.PDrive.App
@@ -18,7 +20,7 @@ pkgname=pdrive-for-linux
 pkgver=0.1.2
 pkgrel=1
 pkgdesc='Unofficial Proton Drive client for Linux (FUSE mount, Nautilus integration)'
-arch=(x86_64)
+arch=(x86_64 aarch64)
 url='https://github.com/bpresles/PDrive-for-Linux'
 # GPL-3.0-or-later: this project. Bundled components: see THIRD_PARTY_NOTICES and licenses/*.tsv.
 license=(GPL-3.0-or-later)
@@ -31,14 +33,14 @@ optdepends=('nautilus: file manager integration (emblems, menu entries)'
             'gnome-shell-extension-appindicator: tray icon on GNOME')
 options=(!lto !debug)
 source=("pdrive-for-linux-$pkgver.tar.xz"
-        "pdrive-native-linux-x64-$_native_id.tar.xz")
+        "pdrive-native-$_rid-$_native_id.tar.xz")
 sha256sums=('SKIP' 'SKIP')
 
 prepare() {
     cd "$pkgname-$pkgver"
-    ( cd "$srcdir/pdrive-native-linux-x64-$_native_id" && sha256sum -c SHA256SUMS )
-    mkdir -p native/linux-x64
-    install -m0755 "$srcdir/pdrive-native-linux-x64-$_native_id"/*.so native/linux-x64/
+    ( cd "$srcdir/pdrive-native-$_rid-$_native_id" && sha256sum -c SHA256SUMS )
+    mkdir -p native/$_rid
+    install -m0755 "$srcdir/pdrive-native-$_rid-$_native_id"/*.so native/$_rid/
     # One version everywhere: the tarball must carry the version of the PKGBUILD.
     local cargo_version
     cargo_version=$(awk '/^\[workspace\.package\]/{f=1;next} /^\[/{f=0} f && /^version *=/{gsub(/"/,"",$3); print $3; exit}' Cargo.toml)
@@ -47,7 +49,7 @@ prepare() {
 
 build() {
     cd "$pkgname-$pkgver"
-    export PDSDK_LIB_DIR="$PWD/native/linux-x64"
+    export PDSDK_LIB_DIR="$PWD/native/$_rid"
     # Run-time location (rpath, and where the SDK loads libproton_crypto.so from).
     export PDSDK_RUNTIME_LIB_DIR=/usr/lib/pdrive
     cargo build --release --frozen --offline -p pdrived -p pdrive -p pdrive-app
@@ -68,7 +70,7 @@ check() {
 package() {
     cd "$pkgname-$pkgver"
     install -Dpm0755 target/release/pdrive target/release/pdrived target/release/pdrive-app -t "$pkgdir/usr/bin"
-    install -Dpm0755 native/linux-x64/libproton_drive_sdk.so native/linux-x64/libproton_crypto.so -t "$pkgdir/usr/lib/pdrive"
+    install -Dpm0755 native/$_rid/libproton_drive_sdk.so native/$_rid/libproton_crypto.so -t "$pkgdir/usr/lib/pdrive"
 
     make -C extension install DESTDIR="$pkgdir" LOCALEDIR=/usr/share/locale
 
@@ -88,6 +90,6 @@ package() {
 
     install -d "$pkgdir/usr/share/licenses/$pkgname" "$pkgdir/usr/share/doc/$pkgname"
     install -Dpm0644 LICENSE THIRD_PARTY_NOTICES THIRD_PARTY_CRATES.txt \
-        "$srcdir/pdrive-native-linux-x64-$_native_id"/LICENSE-* -t "$pkgdir/usr/share/licenses/$pkgname"
-    install -Dpm0644 "$srcdir/pdrive-native-linux-x64-$_native_id/SOURCES.txt" licenses/*.tsv -t "$pkgdir/usr/share/doc/$pkgname"
+        "$srcdir/pdrive-native-$_rid-$_native_id"/LICENSE-* -t "$pkgdir/usr/share/licenses/$pkgname"
+    install -Dpm0644 "$srcdir/pdrive-native-$_rid-$_native_id/SOURCES.txt" licenses/*.tsv -t "$pkgdir/usr/share/doc/$pkgname"
 }
