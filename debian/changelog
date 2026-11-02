@@ -1,3 +1,9 @@
+pdrive-for-linux (0.1.2-1) unstable; urgency=low
+
+  * Release 0.1.2
+
+ -- Bertrand PRESLES <bpresles@gmail.com>  Mon, 02 Nov 2026 10:00:23 +0000
+
 pdrive-for-linux (0.1.1-1) unstable; urgency=low
 
   * Minor cosmetic fixes
