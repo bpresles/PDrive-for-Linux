@@ -521,7 +521,10 @@ impl App {
     fn alert(self: &Rc<Self>, title: &str, body: &str) {
         let dialog = adw::AlertDialog::new(Some(title), (!body.is_empty()).then_some(body));
         dialog.add_response("ok", &tr("OK"));
-        dialog.present(Some(&self.window().window));
+        // The dialog is attached to the status window: show it, or a closed window hides the dialog.
+        let window = self.window();
+        window.window.present();
+        dialog.present(Some(&window.window));
     }
 
     /// Stops the daemon cleanly, then ends the application.
