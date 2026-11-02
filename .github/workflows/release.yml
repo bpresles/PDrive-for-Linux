@@ -1,28 +1,87 @@
-# Release on a version tag (v*): native libraries, vendored source archive, RPM, DEB, Arch package,
-# AppImage, SHA-256 sums,
-# GitHub release, optional COPR submission. The tag must match Cargo.toml (workspace.package.version),
-# packaging/rpm/pdrive-for-linux.spec, packaging/arch/PKGBUILD and debian/changelog, else the run fails at the first job.
+# Release on a version tag (v*), or on manual run (bump patch/minor/major): native libraries,
+# vendored source archive, RPM, DEB, Arch package, AppImage, SHA-256 sums, GitHub release, optional
+# COPR submission. The tag must match Cargo.toml (workspace.package.version),
+# packaging/rpm/pdrive-for-linux.spec, packaging/arch/PKGBUILD and debian/changelog, else the run
+# fails at the first job.
+#
+# Manual run (Actions > release > Run workflow, on the default branch): the "bump" job raises the
+# version (scripts/bump-version.sh), commits it, creates the tag and pushes both, then the same
+# jobs release that tag. The tag is pushed with GITHUB_TOKEN, and GitHub starts no workflow for
+# events created with that token: the tag trigger below does not fire a second run. Keep it so
+# (no PAT or deploy key in the bump job), or the release would run twice.
+# If the run then fails before the GitHub release is done, the "rollback" job deletes the tag and
+# any draft release of it, and reverts the bump commit (a new revert commit, no force push).
 name: release
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version increase (X.Y.Z -> patch X.Y.Z+1, minor X.Y+1.0, major X+1.0.0); commits, tags and releases
+        type: choice
+        options: [patch, minor, major]
+        default: patch
 
 permissions:
   contents: read
 
 jobs:
+  # Manual run only: version bump commit + tag. Skipped on a tag push.
+  bump:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # push the commit and the tag
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
+      sha: ${{ steps.bump.outputs.sha }}
+    steps:
+      - name: Default branch only
+        if: ${{ github.ref_name != github.event.repository.default_branch }}
+        run: |
+          echo "::error::Run this workflow on ${{ github.event.repository.default_branch }}, not ${{ github.ref_name }}"
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: bump
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          version=$(scripts/bump-version.sh "$BUMP")
+          tag="v$version"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "::error::Tag $tag already exists"; exit 1
+          fi
+          scripts/check-version.sh "$tag"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -a -m "chore(release): Increase version to $version"
+          git tag -a "$tag" -m "PDrive for Linux $version"
+          git push origin "HEAD:refs/heads/$GITHUB_REF_NAME" "refs/tags/$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   check:
+    needs: bump
+    # Runs after the bump of a manual run, or alone on a tag push (bump skipped).
+    if: ${{ !cancelled() && (needs.bump.result == 'success' || needs.bump.result == 'skipped') }}
     runs-on: ubuntu-24.04
     outputs:
+      tag: ${{ steps.v.outputs.tag }}
       version: ${{ steps.v.outputs.version }}
       native_archive: ${{ steps.v.outputs.native_archive }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.bump.outputs.tag || github.ref_name }}
       - id: v
+        env:
+          TAG: ${{ needs.bump.outputs.tag || github.ref_name }}
         run: |
-          scripts/check-version.sh "$GITHUB_REF_NAME"
+          scripts/check-version.sh "$TAG"
           source scripts/lib-version.sh
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "native_archive=$NATIVE_ARCHIVE" >> "$GITHUB_OUTPUT"
 
@@ -32,6 +91,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check.outputs.tag }}
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
@@ -55,6 +116,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check.outputs.tag }}
       - run: |
           rustup toolchain install stable --profile minimal
           scripts/make-source-tarball.sh
@@ -73,6 +136,8 @@ jobs:
       NATIVE_ARCHIVE: ${{ needs.check.outputs.native_archive }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check.outputs.tag }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: { name: native, path: dist }
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -98,6 +163,8 @@ jobs:
     steps:
       - run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check.outputs.tag }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: { name: native, path: dist }
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -119,6 +186,8 @@ jobs:
     steps:
       - run: pacman -Syu --noconfirm --needed git
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check.outputs.tag }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: { name: native, path: dist }
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -141,6 +210,8 @@ jobs:
     steps:
       - run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check.outputs.tag }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: { name: native, path: dist }
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -173,7 +244,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.check.outputs.tag }}
         run: |
           existing=$(gh api --paginate "repos/$GH_REPO/releases" \
             --jq '.[] | select(.tag_name == env.TAG) | [.draft, .id] | @tsv' | sort | head -n 1)
@@ -186,6 +257,39 @@ jobs:
               --notes "Unofficial client, not affiliated with Proton AG. Verify the files with SHA256SUMS. Draft: review, then publish." \
               out/*
           fi
+
+  # Manual run whose release did not complete: undo the bump so that the version is not skipped.
+  # Not run when the release job succeeded (the draft release then points at the tag); a later
+  # copr failure does not undo anything.
+  rollback:
+    needs: [bump, check, native, source, rpm, deb, arch, appimage, release]
+    if: ${{ always() && needs.bump.result == 'success' && needs.release.result != 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # delete the tag and the draft release, push the revert
+    env:
+      TAG: ${{ needs.bump.outputs.tag }}
+      SHA: ${{ needs.bump.outputs.sha }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Delete the tag and its draft release
+        run: |
+          # Only drafts: a published release is left alone.
+          gh api --paginate "repos/$GH_REPO/releases" \
+            --jq '.[] | select(.tag_name == env.TAG and .draft) | .id' |
+            while read -r id; do gh api -X DELETE "repos/$GH_REPO/releases/$id"; done
+          git push origin ":refs/tags/$TAG" || echo "Tag $TAG already gone"
+      - name: Revert the bump commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git revert --no-edit "$SHA"
+          git push origin "HEAD:refs/heads/$GITHUB_REF_NAME"
 
   # Optional: set the repository variable COPR_PROJECT (owner/project) and the secret COPR_CONFIG
   # (content of the copr-cli config file). Skipped otherwise.
