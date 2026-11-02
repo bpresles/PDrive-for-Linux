@@ -4,7 +4,7 @@
 # an unprivileged user.
 set -euo pipefail
 pacman -Syu --noconfirm --needed base-devel cargo gettext desktop-file-utils pkgconf nautilus gtk4 libadwaita \
-    glib2 fuse3 xz tar namcap git
+    glib2 fuse3 xz tar namcap git zstd
 useradd --create-home builder
 B=/home/builder/build; mkdir -p "$B"
 cp "/dist/pdrive-for-linux-$VERSION.tar.xz" "/dist/$NATIVE_ARCHIVE" "$B/"
@@ -12,6 +12,7 @@ cp "/dist/pdrive-for-linux-$VERSION.tar.xz" "/dist/$NATIVE_ARCHIVE" "$B/"
 tar -xJf "/dist/pdrive-for-linux-$VERSION.tar.xz" -C /tmp "pdrive-for-linux-$VERSION/packaging/arch/PKGBUILD"
 cp "/tmp/pdrive-for-linux-$VERSION/packaging/arch/PKGBUILD" "$B/"
 chown -R builder: "$B"
-su builder -c "cd '$B' && makepkg --force --noconfirm"
+# PKGEXT forced: the makepkg.conf of Arch Linux ARM defaults to .pkg.tar.xz.
+su builder -c "cd '$B' && PKGEXT='.pkg.tar.zst' makepkg --force --noconfirm"
 cp "$B"/*.pkg.tar.zst /dist/
 namcap "$B"/*.pkg.tar.zst || true
