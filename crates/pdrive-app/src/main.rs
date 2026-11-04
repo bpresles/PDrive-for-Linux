@@ -11,6 +11,7 @@
 //! ends it, after stopping the daemon. The logs of the daemon go to this program's standard
 //! error output, which `logs.rs` sends to the journal when it would be lost.
 
+mod about;
 mod config;
 mod daemon;
 mod logs;
@@ -190,6 +191,7 @@ impl App {
                     Command::ShowWindow => me.show_window(),
                     Command::ToggleMount => me.toggle_mount(),
                     Command::Settings => me.show_settings(),
+                    Command::About => me.show_about(),
                     Command::CheckUpdate => me.checker.check_now(),
                     Command::OpenUpdate => window::open_uri(None, update::RELEASES_URL),
                     Command::Quit => me.quit(),
@@ -218,6 +220,7 @@ impl App {
             self.app.add_action(&action);
         };
         add("settings", App::show_settings);
+        add("about", App::show_about);
         add("sign-in", App::sign_in);
         add("open-folder", App::open_folder);
         add("toggle-mount", App::toggle_mount);
@@ -379,6 +382,12 @@ impl App {
     fn toggle_mount(self: &Rc<Self>) {
         let mounted = matches!(self.status(), Status::Idle | Status::Syncing | Status::Error);
         self.daemon.set_mounted(!mounted);
+    }
+
+    fn show_about(self: &Rc<Self>) {
+        let window = self.window();
+        window.window.present();
+        about::show(&window.window);
     }
 
     fn show_settings(self: &Rc<Self>) {

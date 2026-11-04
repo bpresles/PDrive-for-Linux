@@ -37,6 +37,7 @@ pub enum Command {
     ShowWindow,
     ToggleMount,
     Settings,
+    About,
     CheckUpdate,
     OpenUpdate,
     Quit,
@@ -109,6 +110,8 @@ impl ksni::Tray for Tray {
             self.item(mount, "drive-harddisk-symbolic", Command::ToggleMount),
             self.item(tr("Settings"), "preferences-system-symbolic", Command::Settings),
             update,
+            MenuItem::Separator,
+            self.item(tr("About…"), "help-about-symbolic", Command::About),
             MenuItem::Separator,
             self.item(tr("Quit"), "application-exit-symbolic", Command::Quit),
         ]

@@ -24,7 +24,9 @@ pub fn show(
     sign_out: Rc<dyn Fn()>,
 ) {
     let current = config::load();
-    let dialog = adw::PreferencesDialog::builder().title(tr("Settings")).build();
+    // The natural height misses the second line of the wrapped group description, which shows a
+    // scroll bar: a fixed height shows every group.
+    let dialog = adw::PreferencesDialog::builder().title(tr("Settings")).content_height(620).build();
     let page = adw::PreferencesPage::new();
 
     let folder = adw::PreferencesGroup::builder()
