@@ -62,7 +62,7 @@ pub struct StatusWindow {
 }
 
 impl StatusWindow {
-    /// Actions used (`app.` prefix): `settings`, `sign-in`, `open-folder`, `toggle-mount`.
+    /// Actions used (`app.` prefix): `settings`, `about`, `sign-in`, `open-folder`, `toggle-mount`.
     pub fn new(app: &adw::Application) -> std::rc::Rc<Self> {
         let banner = adw::Banner::new(&tr(
             "No notification area found. On GNOME, enable the “AppIndicator and KStatusNotifierItem Support” extension to get the PDrive icon.",
@@ -70,7 +70,11 @@ impl StatusWindow {
 
         let settings = gtk::Button::builder().icon_name("emblem-system-symbolic").tooltip_text(tr("Settings")).action_name("app.settings").build();
         let header = adw::HeaderBar::new();
+        hide_window_icon(&header);
         header.pack_end(&settings);
+        // Packed after the settings button: shown to its left.
+        let about = gtk::Button::builder().icon_name("help-about-symbolic").tooltip_text(tr("About")).action_name("app.about").build();
+        header.pack_end(&about);
 
         // Sign-in page.
         let sign_in = gtk::Button::builder().label(tr("Sign in")).halign(gtk::Align::Center).action_name("app.sign-in").build();
@@ -215,6 +219,25 @@ pub fn open_uri(parent: Option<&gtk::Window>, uri: &str) {
     gtk::UriLauncher::new(uri).launch(parent, gtk::gio::Cancellable::NONE, move |result| {
         if let Err(e) = result {
             eprintln!("cannot open {uri_owned}: {e}");
+        }
+    });
+}
+
+/// Keeps the desktop's layout of the window buttons, but without the window icon (`icon` in
+/// `gtk-decoration-layout`, set by some desktops such as KDE Plasma), which would otherwise sit
+/// next to the header bar buttons. Follows later changes of the setting.
+fn hide_window_icon(header: &adw::HeaderBar) {
+    fn apply(header: &adw::HeaderBar, settings: &gtk::Settings) {
+        let layout = settings.gtk_decoration_layout().unwrap_or_default();
+        let sides: Vec<String> = layout.split(':').map(|side| side.split(',').filter(|item| item.trim() != "icon").collect::<Vec<_>>().join(",")).collect();
+        header.set_decoration_layout(Some(&sides.join(":")));
+    }
+    let Some(settings) = gtk::Settings::default() else { return };
+    apply(header, &settings);
+    let header = header.downgrade();
+    settings.connect_gtk_decoration_layout_notify(move |settings| {
+        if let Some(header) = header.upgrade() {
+            apply(&header, settings);
         }
     });
 }

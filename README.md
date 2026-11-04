@@ -36,7 +36,8 @@ Status: early alpha (the application identifies itself to Proton with the `-alph
   mount / unmount).
 - **Desktop application** (`pdrive-app`): tray icon, status window (account, used space,
   recent activity, "Open folder", "View online"), settings (mount point, cache size, sign out,
-  start at login, open the window at start) and browser sign-in. It starts `pdrived` and
+  start at login, open the window at start), an "About" dialog (tray menu and window header)
+  and browser sign-in. It starts `pdrived` and
   restarts it if it fails.
 - **Tray icon** through the StatusNotifierItem protocol: native on KDE Plasma, XFCE,
   Cinnamon, MATE, LXQt, waybar. **On GNOME, install and enable the
