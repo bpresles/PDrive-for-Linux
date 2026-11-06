@@ -152,6 +152,7 @@ Contenu de la fenêtre :
   - « View online » (ouvre `https://drive.proton.me`) ;
   - pas de « Add storage ».
 - [x] **État de connexion :** si aucune session, la fenêtre propose « Se connecter », qui lance la connexion par navigateur, l'équivalent de `pdrive login`, avec la mention « application tierce non officielle ». Après connexion, le service démarre ou monte automatiquement.
+- [x] **Session refusée (06/11/2026) :** une session que Proton ne renouvelle plus (expirée, révoquée, ou copie périmée : le jeton de renouvellement ne sert qu'une fois) faisait sortir `pdrived` en erreur, relancé sans fin par le superviseur, l'application restant sur « Démarrage… ». Désormais, `pdrived` sort avec le code 77 (session refusée retirée du trousseau, aussi en cours de fonctionnement), le superviseur ne le relance plus et l'application ouvre la fenêtre et relance la connexion par navigateur. Les renouvellements concurrents sont sérialisés. Cause observée le 05/11/2026 : deux Secret Service (oo7 et GNOME Keyring) selon l'ouverture de session, chacun avec sa copie de la session.
 - [x] **Réglages :** point de montage, taille du cache, déconnexion, démarrage automatique, ouverture de la fenêtre au démarrage.
 
 Choix techniques (tranchés le 28/10/2026) :

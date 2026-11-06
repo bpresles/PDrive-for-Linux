@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pdrive\n"
 "Report-Msgid-Bugs-To: https://github.com/bpresles/PDrive-for-Linux/issues\n"
-"POT-Creation-Date: 2026-11-02 11:57+0100\n"
+"POT-Creation-Date: 2026-11-04 21:35+0100\n"
 "PO-Revision-Date: 2026-10-28 22:02+0100\n"
 "Last-Translator: PDrive for Linux authors\n"
 "Language-Team: French\n"
@@ -26,33 +26,33 @@ msgstr "Client Proton Drive non officiel pour Linux, intégré au bureau."
 msgid "Version {}"
 msgstr "Version {}"
 
-#: crates/pdrive-app/src/about.rs:39 crates/pdrive-app/src/window.rs:76
+#: crates/pdrive-app/src/about.rs:39 crates/pdrive-app/src/window.rs:77
 msgid "About"
 msgstr "À propos"
 
-#: crates/pdrive-app/src/main.rs:441
+#: crates/pdrive-app/src/main.rs:466
 msgid "Sign-in failed"
 msgstr "Échec de la connexion"
 
-#: crates/pdrive-app/src/main.rs:441
+#: crates/pdrive-app/src/main.rs:466
 msgid "The sign-in did not complete. Try again."
 msgstr "La connexion n’a pas abouti. Réessayez."
 
-#: crates/pdrive-app/src/main.rs:455
+#: crates/pdrive-app/src/main.rs:480
 msgid "Sign-out failed"
 msgstr "Échec de la déconnexion"
 
-#: crates/pdrive-app/src/main.rs:455
+#: crates/pdrive-app/src/main.rs:480
 msgid "The session could not be removed. See the logs of the application."
 msgstr ""
 "La session n’a pas pu être supprimée. Consultez les journaux de "
 "l’application."
 
-#: crates/pdrive-app/src/main.rs:469
+#: crates/pdrive-app/src/main.rs:494
 msgid "Start PDrive when you log in?"
 msgstr "Lancer PDrive à l’ouverture de session ?"
 
-#: crates/pdrive-app/src/main.rs:470
+#: crates/pdrive-app/src/main.rs:495
 msgid ""
 "The Proton Drive folder is then mounted automatically. You can change this "
 "in the settings."
@@ -60,41 +60,41 @@ msgstr ""
 "Le dossier Proton Drive est alors monté automatiquement. Vous pouvez "
 "modifier ce choix dans les réglages."
 
-#: crates/pdrive-app/src/main.rs:472
+#: crates/pdrive-app/src/main.rs:497
 msgid "Not now"
 msgstr "Pas maintenant"
 
-#: crates/pdrive-app/src/main.rs:472
+#: crates/pdrive-app/src/main.rs:497
 msgid "Start at login"
 msgstr "Lancer à l’ouverture de session"
 
-#: crates/pdrive-app/src/main.rs:501
+#: crates/pdrive-app/src/main.rs:526
 msgid "You already have the latest version"
 msgstr "Vous avez déjà la dernière version"
 
-#: crates/pdrive-app/src/main.rs:506
+#: crates/pdrive-app/src/main.rs:531
 msgid "Cannot check for updates"
 msgstr "Impossible de rechercher les mises à jour"
 
-#: crates/pdrive-app/src/main.rs:516
+#: crates/pdrive-app/src/main.rs:541
 #, rust-format
 msgid "New version is available: v{}"
 msgstr "Une nouvelle version est disponible : v{}"
 
-#: crates/pdrive-app/src/main.rs:517
+#: crates/pdrive-app/src/main.rs:542
 msgid "Ignore"
 msgstr "Ignorer"
 
-#: crates/pdrive-app/src/main.rs:517
+#: crates/pdrive-app/src/main.rs:542
 msgid "Update"
 msgstr "Mettre à jour"
 
-#: crates/pdrive-app/src/main.rs:530 crates/pdrive-app/src/main.rs:536
+#: crates/pdrive-app/src/main.rs:555 crates/pdrive-app/src/main.rs:561
 msgid "OK"
 msgstr "OK"
 
 #: crates/pdrive-app/src/settings.rs:29 crates/pdrive-app/src/tray.rs:111
-#: crates/pdrive-app/src/window.rs:71
+#: crates/pdrive-app/src/window.rs:72
 msgid "Settings"
 msgstr "Réglages"
 
@@ -170,12 +170,12 @@ msgstr ""
 msgid "Cancel"
 msgstr "Annuler"
 
-#: crates/pdrive-app/src/tray.rs:101 crates/pdrive-app/src/window.rs:185
+#: crates/pdrive-app/src/tray.rs:101 crates/pdrive-app/src/window.rs:204
 #: crates/pdrived/src/dbus.rs:375
 msgid "Mount"
 msgstr "Monter"
 
-#: crates/pdrive-app/src/tray.rs:101 crates/pdrive-app/src/window.rs:189
+#: crates/pdrive-app/src/tray.rs:101 crates/pdrive-app/src/window.rs:208
 #: crates/pdrived/src/dbus.rs:373
 msgid "Unmount"
 msgstr "Démonter"
@@ -185,7 +185,7 @@ msgstr "Démonter"
 msgid "Update available: v{}"
 msgstr "Mise à jour disponible : v{}"
 
-#: crates/pdrive-app/src/tray.rs:107 crates/pdrive-app/src/window.rs:110
+#: crates/pdrive-app/src/tray.rs:107 crates/pdrive-app/src/window.rs:111
 msgid "Open folder"
 msgstr "Ouvrir le dossier"
 
@@ -229,7 +229,7 @@ msgstr "À jour"
 msgid "Error: an upload failed"
 msgstr "Erreur : un envoi a échoué"
 
-#: crates/pdrive-app/src/window.rs:68
+#: crates/pdrive-app/src/window.rs:69
 msgid ""
 "No notification area found. On GNOME, enable the “AppIndicator and "
 "KStatusNotifierItem Support” extension to get the PDrive icon."
@@ -238,106 +238,110 @@ msgstr ""
 "« AppIndicator and KStatusNotifierItem Support » pour afficher l’icône de "
 "PDrive."
 
-#: crates/pdrive-app/src/window.rs:80 crates/pdrive-app/src/window.rs:174
+#: crates/pdrive-app/src/window.rs:81 crates/pdrive-app/src/window.rs:193
 msgid "Sign in"
 msgstr "Se connecter"
 
-#: crates/pdrive-app/src/window.rs:85
+#: crates/pdrive-app/src/window.rs:86 crates/pdrive-app/src/window.rs:188
 msgid "Sign in to Proton Drive"
 msgstr "Se connecter à Proton Drive"
 
-#: crates/pdrive-app/src/window.rs:86
+#: crates/pdrive-app/src/window.rs:87
 msgid "Unofficial third-party application, not affiliated with Proton AG."
 msgstr "Application tierce non officielle, non affiliée à Proton AG."
 
-#: crates/pdrive-app/src/window.rs:105
+#: crates/pdrive-app/src/window.rs:106
 msgid "No recent activity"
 msgstr "Aucune activité récente"
 
-#: crates/pdrive-app/src/window.rs:112
+#: crates/pdrive-app/src/window.rs:113
 msgid "View online"
 msgstr "Voir en ligne"
 
-#: crates/pdrive-app/src/window.rs:174
+#: crates/pdrive-app/src/window.rs:188
+msgid "Your session has expired: sign in again"
+msgstr "Votre session a expiré : reconnectez-vous"
+
+#: crates/pdrive-app/src/window.rs:193
 msgid "Waiting for the browser…"
 msgstr "En attente du navigateur…"
 
-#: crates/pdrive-app/src/window.rs:247
+#: crates/pdrive-app/src/window.rs:266
 #, rust-format
 msgid "{} used of {}"
 msgstr "{} utilisés sur {}"
 
-#: crates/pdrive-app/src/window.rs:283
+#: crates/pdrive-app/src/window.rs:302
 msgid "Uploading…"
 msgstr "Envoi en cours…"
 
-#: crates/pdrive-app/src/window.rs:284
+#: crates/pdrive-app/src/window.rs:303
 msgid "Upload failed"
 msgstr "Échec de l’envoi"
 
-#: crates/pdrive-app/src/window.rs:285
+#: crates/pdrive-app/src/window.rs:304
 msgid "Uploaded"
 msgstr "Envoyé"
 
-#: crates/pdrive-app/src/window.rs:286
+#: crates/pdrive-app/src/window.rs:305
 msgid "Downloading…"
 msgstr "Téléchargement en cours…"
 
-#: crates/pdrive-app/src/window.rs:287
+#: crates/pdrive-app/src/window.rs:306
 msgid "Download failed"
 msgstr "Échec du téléchargement"
 
-#: crates/pdrive-app/src/window.rs:288
+#: crates/pdrive-app/src/window.rs:307
 msgid "Downloaded"
 msgstr "Téléchargé"
 
-#: crates/pdrive-app/src/window.rs:289
+#: crates/pdrive-app/src/window.rs:308
 msgid "Renamed"
 msgstr "Renommé"
 
-#: crates/pdrive-app/src/window.rs:290
+#: crates/pdrive-app/src/window.rs:309
 msgid "Moved"
 msgstr "Déplacé"
 
-#: crates/pdrive-app/src/window.rs:291
+#: crates/pdrive-app/src/window.rs:310
 msgid "Moved to trash"
 msgstr "Mis à la corbeille"
 
-#: crates/pdrive-app/src/window.rs:292
+#: crates/pdrive-app/src/window.rs:311
 msgid "Added online"
 msgstr "Ajouté en ligne"
 
-#: crates/pdrive-app/src/window.rs:293
+#: crates/pdrive-app/src/window.rs:312
 msgid "Renamed online"
 msgstr "Renommé en ligne"
 
-#: crates/pdrive-app/src/window.rs:294
+#: crates/pdrive-app/src/window.rs:313
 msgid "Updated online"
 msgstr "Mis à jour en ligne"
 
-#: crates/pdrive-app/src/window.rs:295
+#: crates/pdrive-app/src/window.rs:314
 msgid "Removed online"
 msgstr "Supprimé en ligne"
 
-#: crates/pdrive-app/src/window.rs:303
+#: crates/pdrive-app/src/window.rs:322
 msgid "Just now"
 msgstr "À l’instant"
 
-#: crates/pdrive-app/src/window.rs:304
+#: crates/pdrive-app/src/window.rs:323
 #, rust-format
 msgid "{} minute ago"
 msgid_plural "{} minutes ago"
 msgstr[0] "Il y a {} minute"
 msgstr[1] "Il y a {} minutes"
 
-#: crates/pdrive-app/src/window.rs:305
+#: crates/pdrive-app/src/window.rs:324
 #, rust-format
 msgid "{} hour ago"
 msgid_plural "{} hours ago"
 msgstr[0] "Il y a {} heure"
 msgstr[1] "Il y a {} heures"
 
-#: crates/pdrive-app/src/window.rs:306
+#: crates/pdrive-app/src/window.rs:325
 #, rust-format
 msgid "{} day ago"
 msgid_plural "{} days ago"

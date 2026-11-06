@@ -12,7 +12,8 @@
 //! a stop are resumed at the next start. Normally started and supervised by `pdrive-app`; it can
 //! also be run alone (debugging). Stop with Ctrl+C or SIGTERM; when the mount is ejected
 //! (`fusermount3 -u MOUNTPOINT`, or from the file manager), the daemon waits for a mount request.
-//! Set PDRIVE_VERBOSE=1 for logs.
+//! When the session is refused (no session, expired or revoked), it stops with
+//! [`EXIT_SIGN_IN_REQUIRED`], and `pdrive-app` signs in again. Set PDRIVE_VERBOSE=1 for logs.
 
 mod activity;
 mod config;
@@ -30,6 +31,7 @@ mod watch;
 mod writes;
 
 use std::path::PathBuf;
+use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -48,9 +50,12 @@ use thumbnails::ThumbnailCache;
 use writes::Staging;
 
 const CACHE_PURGE_INTERVAL: Duration = Duration::from_secs(10 * 60);
+/// Exit status when only a new sign-in can help (`EX_NOPERM`): `pdrive-app` then signs in again
+/// instead of restarting the daemon. Same value in `pdrive-app/src/supervisor.rs`.
+const EXIT_SIGN_IN_REQUIRED: u8 = 77;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<ExitCode> {
     pdi18n::init();
     config::migrate_legacy_dirs()?;
     let settings = Settings::load()?;
@@ -68,8 +73,16 @@ async fn main() -> Result<()> {
     }
     let mountpoint = mountpoint::resolve(&mountpoint)?;
 
-    let (client, api) = pdcore::connect_with_api(verbose).await?;
-    let root = client.my_files_folder().await?;
+    let (client, api) = match pdcore::connect_with_api(verbose).await {
+        Ok(connected) => connected,
+        Err(e) if pdcore::needs_sign_in(&e) => return Ok(sign_in_required(&e)),
+        Err(e) => return Err(e),
+    };
+    let root = match client.my_files_folder().await {
+        Ok(root) => root,
+        Err(e) if api.session_rejected() => return Ok(sign_in_required(&e)),
+        Err(e) => return Err(e.into()),
+    };
     let scope = root.tree_event_scope_id.clone();
     let activity = Arc::new(ActivityLog::default());
     let content = ContentCache::new(content_dir, tokio::runtime::Handle::current(), activity.clone(), verbose);
@@ -98,8 +111,9 @@ async fn main() -> Result<()> {
         }),
     ];
 
-    // Mounted until stopped. When the mount is ejected (unmounted from outside, or with the
-    // "Unmount" sidebar action), the daemon keeps running and mounts again on request ("Mount").
+    // Mounted until stopped, or until the session is refused. When the mount is ejected (unmounted
+    // from outside, or with the "Unmount" sidebar action), the daemon keeps running and mounts
+    // again on request ("Mount").
     let mut terminate = signal(SignalKind::terminate())?;
     let mut wanted = drive.wanted_mounted.subscribe();
     let result = loop {
@@ -112,6 +126,7 @@ async fn main() -> Result<()> {
         let ejected = tokio::select! {
             _ = tokio::signal::ctrl_c() => None,
             _ = terminate.recv() => None,
+            _ = drive.api.wait_session_rejected() => None,
             result = &mut session_loop => Some(result),
             // "Unmount" from the sidebar: like an eject.
             _ = wanted.wait_for(|wanted| !*wanted) => {
@@ -137,6 +152,7 @@ async fn main() -> Result<()> {
                     _ = wanted.wait_for(|wanted| *wanted) => continue,
                     _ = tokio::signal::ctrl_c() => break Ok(()),
                     _ = terminate.recv() => break Ok(()),
+                    _ = drive.api.wait_session_rejected() => break Ok(()),
                 }
             }
             None => {
@@ -153,7 +169,16 @@ async fn main() -> Result<()> {
         task.abort();
     }
     println!("Stopped. Pending uploads, if any, are resumed at the next start.");
-    result
+    if drive.api.session_rejected() {
+        return Ok(sign_in_required(&pdcore::SignInRequired::SessionRejected));
+    }
+    result.map(|()| ExitCode::SUCCESS)
+}
+
+/// Logs why the daemon cannot run without a new sign-in, and returns the status that tells it.
+fn sign_in_required(reason: &dyn std::fmt::Display) -> ExitCode {
+    eprintln!("Sign-in required: {reason:#}");
+    ExitCode::from(EXIT_SIGN_IN_REQUIRED)
 }
 
 fn mount(drive: &Arc<Drive>) -> Result<fuser::Session<DriveFs>> {

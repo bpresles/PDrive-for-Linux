@@ -45,6 +45,13 @@ manager or with
 .BR "fusermount3 \-u" ),
 the daemon waits for a new mount request. FUSE mounting uses
 .BR fusermount3 .
+.SH EXIT STATUS
+0 when stopped, 77 when a new sign-in is needed (no session, a session that
+the server no longer accepts, or account keys that the stored session cannot
+unlock; a session refused by the server is removed from the keyring), and
+another non-zero status on other failures.
+.BR pdrive-app (1)
+signs in again after status 77 and restarts the daemon after other failures.
 .SH ENVIRONMENT
 .TP
 .B PDRIVE_VERBOSE

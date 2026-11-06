@@ -50,6 +50,7 @@ pub struct StatusWindow {
     pub window: adw::ApplicationWindow,
     banner: adw::Banner,
     stack: gtk::Stack,
+    signin_page: adw::StatusPage,
     sign_in: gtk::Button,
     avatar: adw::Avatar,
     account: gtk::Label,
@@ -151,8 +152,21 @@ impl StatusWindow {
             .content(&toolbar)
             .build();
 
-        let this =
-            std::rc::Rc::new(Self { window, banner, stack, sign_in, avatar, account, quota, list, status, spinner, mount, activity: RefCell::new(Vec::new()) });
+        let this = std::rc::Rc::new(Self {
+            window,
+            banner,
+            stack,
+            signin_page,
+            sign_in,
+            avatar,
+            account,
+            quota,
+            list,
+            status,
+            spinner,
+            mount,
+            activity: RefCell::new(Vec::new()),
+        });
         // Relative times age while the window stays open.
         let weak = std::rc::Rc::downgrade(&this);
         glib::timeout_add_seconds_local(30, move || {
@@ -167,6 +181,11 @@ impl StatusWindow {
 
     pub fn set_notification_area_missing(&self, missing: bool) {
         self.banner.set_revealed(missing);
+    }
+
+    /// The sign-in page says that the previous session expired (rather than a first sign-in).
+    pub fn set_session_expired(&self, expired: bool) {
+        self.signin_page.set_title(&if expired { tr("Your session has expired: sign in again") } else { tr("Sign in to Proton Drive") });
     }
 
     pub fn set_signing_in(&self, waiting: bool) {
