@@ -53,6 +53,8 @@ struct App {
     background: Cell<bool>,
     /// A command line was handled already.
     launched: Cell<bool>,
+    /// `pdrive login` is running.
+    signing_in: Cell<bool>,
     activity_pending: Cell<bool>,
     quitting: Cell<bool>,
 }
@@ -139,7 +141,14 @@ impl App {
                 }
             }
         };
-        let supervisor = Supervisor::new(refresh.clone());
+        let supervisor = Supervisor::new(refresh.clone(), {
+            let this = this.clone();
+            move || {
+                if let Some(app) = this.borrow().as_ref().and_then(|w| w.upgrade()) {
+                    app.session_expired();
+                }
+            }
+        });
         let daemon = Daemon::connect({
             let this = this.clone();
             move |activity| {
@@ -166,6 +175,7 @@ impl App {
             watcher_present: Cell::new(true),
             background: Cell::new(false),
             launched: Cell::new(false),
+            signing_in: Cell::new(false),
             activity_pending: Cell::new(false),
             quitting: Cell::new(false),
         });
@@ -424,15 +434,30 @@ impl App {
         });
     }
 
+    /// The daemon stopped because the session is refused (expired, revoked) or missing: signs in
+    /// again through the browser at once, with the window explaining why the browser opens.
+    fn session_expired(self: &Rc<Self>) {
+        eprintln!("the session is no longer valid: signing in again through the browser");
+        let window = self.window();
+        window.set_session_expired(true);
+        window.window.present();
+        self.sign_in();
+    }
+
     /// `pdrive login` (browser sign-in), then the daemon starts.
     fn sign_in(self: &Rc<Self>) {
+        if self.signing_in.replace(true) {
+            return;
+        }
         let window = self.window();
         window.set_signing_in(true);
         let me = self.clone();
         glib::spawn_future_local(async move {
             let status = gio::spawn_blocking(|| std::process::Command::new(program("pdrive")).arg("login").status()).await;
+            me.signing_in.set(false);
             window.set_signing_in(false);
             if matches!(status, Ok(Ok(status)) if status.success()) {
+                window.set_session_expired(false);
                 me.supervisor.set_signed_in(true);
                 me.supervisor.resume();
                 me.supervisor.ensure_running();

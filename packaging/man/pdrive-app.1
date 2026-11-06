@@ -14,6 +14,8 @@ client. It runs and supervises
 (restarting it with an increasing delay if it fails), shows an icon in the
 notification area (StatusNotifierItem) and a status window with the account,
 used space, recent activity and settings, and lets you sign in and out.
+When the session is no longer accepted (expired or revoked), the daemon is not
+restarted: the status window opens and the browser sign-in starts again.
 .PP
 Only one instance runs: starting the application again shows the status window.
 Closing the window does not quit the application; use

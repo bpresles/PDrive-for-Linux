@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Bertrand Presles
 //! Runs `pdrived` as a child process and restarts it when it fails, with a growing delay
 //! (like `Restart=on-failure`). It is not started without a session in the keyring, nor when
-//! another daemon already owns the D-Bus name.
+//! another daemon already owns the D-Bus name. When it stops because the session is refused
+//! ([`EXIT_SIGN_IN_REQUIRED`]), it is not restarted before a new sign-in.
 
 use std::cell::RefCell;
 use std::os::fd::AsFd;
@@ -23,6 +24,9 @@ const MAX_DELAY: Duration = Duration::from_secs(5 * 60);
 const HEALTHY_AFTER: Duration = Duration::from_secs(60);
 /// Time given to the daemon to unmount and stop after SIGTERM, before SIGKILL.
 const STOP_TIMEOUT: Duration = Duration::from_secs(20);
+/// Exit status of `pdrived` when only a new sign-in can help (no session, or the server refused
+/// it). Same value in `pdrived/src/main.rs`.
+const EXIT_SIGN_IN_REQUIRED: i32 = 77;
 
 /// Path of a program installed next to this one, otherwise looked up in the PATH.
 pub fn program(name: &str) -> PathBuf {
@@ -36,6 +40,8 @@ struct Inner {
     started: Option<Instant>,
     /// No (re)start: the daemon is being stopped on purpose.
     paused: bool,
+    /// No (re)start before a new sign-in: the daemon reported that the session is refused.
+    sign_in_required: bool,
     checking: bool,
     retry: Option<glib::SourceId>,
     delay: Duration,
@@ -45,22 +51,26 @@ struct Inner {
 pub struct Supervisor {
     inner: RefCell<Inner>,
     on_change: Box<dyn Fn()>,
+    on_sign_in_required: Box<dyn Fn()>,
 }
 
 impl Supervisor {
-    pub fn new(on_change: impl Fn() + 'static) -> Rc<Self> {
+    /// `on_sign_in_required` is called when the daemon stops because the session is refused.
+    pub fn new(on_change: impl Fn() + 'static, on_sign_in_required: impl Fn() + 'static) -> Rc<Self> {
         Rc::new(Self {
             inner: RefCell::new(Inner {
                 signed_in: None,
                 pid: None,
                 started: None,
                 paused: false,
+                sign_in_required: false,
                 checking: false,
                 retry: None,
                 delay: FIRST_DELAY,
                 waiters: Vec::new(),
             }),
             on_change: Box::new(on_change),
+            on_sign_in_required: Box::new(on_sign_in_required),
         })
     }
 
@@ -69,7 +79,13 @@ impl Supervisor {
     }
 
     pub fn set_signed_in(&self, signed_in: bool) {
-        self.inner.borrow_mut().signed_in = Some(signed_in);
+        {
+            let mut inner = self.inner.borrow_mut();
+            inner.signed_in = Some(signed_in);
+            if signed_in {
+                inner.sign_in_required = false;
+            }
+        }
         (self.on_change)();
     }
 
@@ -90,7 +106,7 @@ impl Supervisor {
     pub fn ensure_running(self: &Rc<Self>) {
         {
             let mut inner = self.inner.borrow_mut();
-            if inner.paused || inner.pid.is_some() || inner.checking || inner.retry.is_some() {
+            if inner.paused || inner.sign_in_required || inner.pid.is_some() || inner.checking || inner.retry.is_some() {
                 return;
             }
             inner.checking = true;
@@ -101,7 +117,11 @@ impl Supervisor {
             let owned = if signed_in { name_has_owner().await } else { false };
             this.inner.borrow_mut().checking = false;
             this.inner.borrow_mut().signed_in = Some(signed_in);
-            if signed_in && !owned && !this.inner.borrow().paused {
+            let blocked = {
+                let inner = this.inner.borrow();
+                inner.paused || inner.sign_in_required
+            };
+            if signed_in && !owned && !blocked {
                 this.spawn();
             }
             (this.on_change)();
@@ -158,10 +178,17 @@ impl Supervisor {
 
     fn exited(self: &Rc<Self>, status: Option<std::process::ExitStatus>) {
         eprintln!("pdrived stopped ({})", status.map_or("unknown status".to_owned(), |s| s.to_string()));
+        let sign_in_required = status.and_then(|s| s.code()) == Some(EXIT_SIGN_IN_REQUIRED);
         let (waiters, paused) = {
             let mut inner = self.inner.borrow_mut();
             inner.pid = None;
             if inner.started.is_some_and(|t| t.elapsed() > HEALTHY_AFTER) {
+                inner.delay = FIRST_DELAY;
+            }
+            if sign_in_required {
+                // Restarting would fail the same way: wait for a new sign-in.
+                inner.sign_in_required = true;
+                inner.signed_in = Some(false);
                 inner.delay = FIRST_DELAY;
             }
             (std::mem::take(&mut inner.waiters), inner.paused)
@@ -169,10 +196,13 @@ impl Supervisor {
         for waiter in waiters {
             waiter();
         }
-        if !paused && !status.is_some_and(|s| s.success()) {
+        if !paused && !sign_in_required && !status.is_some_and(|s| s.success()) {
             self.schedule_retry();
         }
         (self.on_change)();
+        if sign_in_required && !paused {
+            (self.on_sign_in_required)();
+        }
     }
 
     fn schedule_retry(self: &Rc<Self>) {

@@ -48,7 +48,9 @@ Status: early alpha (the application identifies itself to Proton with the `-alph
 - **Command-line tool** `pdrive`: `login`, `logout`, `status`, `ls [PATH]`, `selftest`.
 
 The session is kept in the Secret Service keyring (GNOME Keyring, KWallet, ...). The
-sign-in goes through your browser: PDrive never sees your password.
+sign-in goes through your browser: PDrive never sees your password. When Proton no longer
+accepts the session (expired or revoked), the application opens the browser sign-in again by
+itself.
 
 ## Architecture
 
@@ -218,6 +220,10 @@ Without a journal, the log is `$XDG_STATE_HOME/pdrive/pdrive.log` (by default
 - `O_NOATIME` is refused on files that are not in the cache.
 - Deleting a file moves it directly to the Proton trash, not to the Nautilus trash.
 - Rendering on KDE and GNOME, and the translated Nautilus menus, still need more real-world testing.
+- Keep a single Secret Service on the desktop. With two of them installed (for example GNOME
+  Keyring and oo7), whichever starts first at login answers, each with its own copy of the
+  session; Proton renews the session regularly and refuses the outdated copy, which then asks
+  for a new sign-in.
 
 The roadmap is in `PLAN.md` (in French).
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pdrive\n"
 "Report-Msgid-Bugs-To: https://github.com/bpresles/PDrive-for-Linux/issues\n"
-"POT-Creation-Date: 2026-11-02 11:57+0100\n"
+"POT-Creation-Date: 2026-11-04 21:35+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -27,71 +27,71 @@ msgstr ""
 msgid "Version {}"
 msgstr ""
 
-#: crates/pdrive-app/src/about.rs:39 crates/pdrive-app/src/window.rs:76
+#: crates/pdrive-app/src/about.rs:39 crates/pdrive-app/src/window.rs:77
 msgid "About"
 msgstr ""
 
-#: crates/pdrive-app/src/main.rs:441
+#: crates/pdrive-app/src/main.rs:466
 msgid "Sign-in failed"
 msgstr ""
 
-#: crates/pdrive-app/src/main.rs:441
+#: crates/pdrive-app/src/main.rs:466
 msgid "The sign-in did not complete. Try again."
 msgstr ""
 
-#: crates/pdrive-app/src/main.rs:455
+#: crates/pdrive-app/src/main.rs:480
 msgid "Sign-out failed"
 msgstr ""
 
-#: crates/pdrive-app/src/main.rs:455
+#: crates/pdrive-app/src/main.rs:480
 msgid "The session could not be removed. See the logs of the application."
 msgstr ""
 
-#: crates/pdrive-app/src/main.rs:469
+#: crates/pdrive-app/src/main.rs:494
 msgid "Start PDrive when you log in?"
 msgstr ""
 
-#: crates/pdrive-app/src/main.rs:470
+#: crates/pdrive-app/src/main.rs:495
 msgid ""
 "The Proton Drive folder is then mounted automatically. You can change this "
 "in the settings."
 msgstr ""
 
-#: crates/pdrive-app/src/main.rs:472
+#: crates/pdrive-app/src/main.rs:497
 msgid "Not now"
 msgstr ""
 
-#: crates/pdrive-app/src/main.rs:472
+#: crates/pdrive-app/src/main.rs:497
 msgid "Start at login"
 msgstr ""
 
-#: crates/pdrive-app/src/main.rs:501
+#: crates/pdrive-app/src/main.rs:526
 msgid "You already have the latest version"
 msgstr ""
 
-#: crates/pdrive-app/src/main.rs:506
+#: crates/pdrive-app/src/main.rs:531
 msgid "Cannot check for updates"
 msgstr ""
 
-#: crates/pdrive-app/src/main.rs:516
+#: crates/pdrive-app/src/main.rs:541
 #, rust-format
 msgid "New version is available: v{}"
 msgstr ""
 
-#: crates/pdrive-app/src/main.rs:517
+#: crates/pdrive-app/src/main.rs:542
 msgid "Ignore"
 msgstr ""
 
-#: crates/pdrive-app/src/main.rs:517
+#: crates/pdrive-app/src/main.rs:542
 msgid "Update"
 msgstr ""
 
-#: crates/pdrive-app/src/main.rs:530 crates/pdrive-app/src/main.rs:536
+#: crates/pdrive-app/src/main.rs:555 crates/pdrive-app/src/main.rs:561
 msgid "OK"
 msgstr ""
 
 #: crates/pdrive-app/src/settings.rs:29 crates/pdrive-app/src/tray.rs:111
-#: crates/pdrive-app/src/window.rs:71
+#: crates/pdrive-app/src/window.rs:72
 msgid "Settings"
 msgstr ""
 
@@ -163,12 +163,12 @@ msgstr ""
 msgid "Cancel"
 msgstr ""
 
-#: crates/pdrive-app/src/tray.rs:101 crates/pdrive-app/src/window.rs:185
+#: crates/pdrive-app/src/tray.rs:101 crates/pdrive-app/src/window.rs:204
 #: crates/pdrived/src/dbus.rs:375
 msgid "Mount"
 msgstr ""
 
-#: crates/pdrive-app/src/tray.rs:101 crates/pdrive-app/src/window.rs:189
+#: crates/pdrive-app/src/tray.rs:101 crates/pdrive-app/src/window.rs:208
 #: crates/pdrived/src/dbus.rs:373
 msgid "Unmount"
 msgstr ""
@@ -178,7 +178,7 @@ msgstr ""
 msgid "Update available: v{}"
 msgstr ""
 
-#: crates/pdrive-app/src/tray.rs:107 crates/pdrive-app/src/window.rs:110
+#: crates/pdrive-app/src/tray.rs:107 crates/pdrive-app/src/window.rs:111
 msgid "Open folder"
 msgstr ""
 
@@ -222,112 +222,116 @@ msgstr ""
 msgid "Error: an upload failed"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:68
+#: crates/pdrive-app/src/window.rs:69
 msgid ""
 "No notification area found. On GNOME, enable the “AppIndicator and "
 "KStatusNotifierItem Support” extension to get the PDrive icon."
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:80 crates/pdrive-app/src/window.rs:174
+#: crates/pdrive-app/src/window.rs:81 crates/pdrive-app/src/window.rs:193
 msgid "Sign in"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:85
+#: crates/pdrive-app/src/window.rs:86 crates/pdrive-app/src/window.rs:188
 msgid "Sign in to Proton Drive"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:86
+#: crates/pdrive-app/src/window.rs:87
 msgid "Unofficial third-party application, not affiliated with Proton AG."
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:105
+#: crates/pdrive-app/src/window.rs:106
 msgid "No recent activity"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:112
+#: crates/pdrive-app/src/window.rs:113
 msgid "View online"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:174
+#: crates/pdrive-app/src/window.rs:188
+msgid "Your session has expired: sign in again"
+msgstr ""
+
+#: crates/pdrive-app/src/window.rs:193
 msgid "Waiting for the browser…"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:247
+#: crates/pdrive-app/src/window.rs:266
 #, rust-format
 msgid "{} used of {}"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:283
+#: crates/pdrive-app/src/window.rs:302
 msgid "Uploading…"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:284
+#: crates/pdrive-app/src/window.rs:303
 msgid "Upload failed"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:285
+#: crates/pdrive-app/src/window.rs:304
 msgid "Uploaded"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:286
+#: crates/pdrive-app/src/window.rs:305
 msgid "Downloading…"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:287
+#: crates/pdrive-app/src/window.rs:306
 msgid "Download failed"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:288
+#: crates/pdrive-app/src/window.rs:307
 msgid "Downloaded"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:289
+#: crates/pdrive-app/src/window.rs:308
 msgid "Renamed"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:290
+#: crates/pdrive-app/src/window.rs:309
 msgid "Moved"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:291
+#: crates/pdrive-app/src/window.rs:310
 msgid "Moved to trash"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:292
+#: crates/pdrive-app/src/window.rs:311
 msgid "Added online"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:293
+#: crates/pdrive-app/src/window.rs:312
 msgid "Renamed online"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:294
+#: crates/pdrive-app/src/window.rs:313
 msgid "Updated online"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:295
+#: crates/pdrive-app/src/window.rs:314
 msgid "Removed online"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:303
+#: crates/pdrive-app/src/window.rs:322
 msgid "Just now"
 msgstr ""
 
-#: crates/pdrive-app/src/window.rs:304
+#: crates/pdrive-app/src/window.rs:323
 #, rust-format
 msgid "{} minute ago"
 msgid_plural "{} minutes ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: crates/pdrive-app/src/window.rs:305
+#: crates/pdrive-app/src/window.rs:324
 #, rust-format
 msgid "{} hour ago"
 msgid_plural "{} hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: crates/pdrive-app/src/window.rs:306
+#: crates/pdrive-app/src/window.rs:325
 #, rust-format
 msgid "{} day ago"
 msgid_plural "{} days ago"

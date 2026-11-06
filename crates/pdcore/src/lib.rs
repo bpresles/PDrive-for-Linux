@@ -11,11 +11,12 @@ pub mod session;
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use pdsdk::{ClientOptions, DriveClient};
 use reqwest::Method;
 
 use api::ApiClient;
+pub use api::{SignInRequired, needs_sign_in};
 use host::AppHost;
 use keys::AccountKeys;
 
@@ -32,9 +33,11 @@ pub async fn login() -> Result<()> {
 pub async fn logout() -> Result<()> {
     if let Some(session) = session::load().await? {
         let api = ApiClient::new(Some(session))?;
-        let reply = api.send(Method::DELETE, &ApiClient::url("auth/v4"), &[], None).await?;
-        if !reply.status.is_success() {
-            eprintln!("Server-side revocation failed ({}); removing the local session anyway.", reply.status);
+        match api.send(Method::DELETE, &ApiClient::url("auth/v4"), &[], None).await {
+            Ok(reply) if reply.status.is_success() => {}
+            Ok(reply) => eprintln!("Server-side revocation failed ({}); removing the local session anyway.", reply.status),
+            Err(e) if needs_sign_in(&e) => eprintln!("The session was no longer valid on the server; removing the local session."),
+            Err(e) => return Err(e),
         }
     }
     session::delete().await
@@ -47,7 +50,7 @@ pub async fn connect(verbose: bool) -> Result<DriveClient> {
 
 /// Like [`connect`], also returning the API client (for account calls such as [`account_info`]).
 pub async fn connect_with_api(verbose: bool) -> Result<(DriveClient, Arc<ApiClient>)> {
-    let session = session::load().await?.context("not signed in: run `pdrive login` first")?;
+    let session = session::load().await?.ok_or(SignInRequired::NotSignedIn)?;
     let key_password = session.key_password.clone();
     let api = Arc::new(ApiClient::new(Some(session))?);
 

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Bertrand Presles
 //! Account data the SDK asks for: addresses and their unlocked private keys.
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use proton_crypto::crypto::{DataEncoding, PGPProviderSync};
 use proton_crypto_account::keys::{AddressKeys, LockedKey, UserKeys};
 use proton_crypto_account::salts::KeySecret;
@@ -11,7 +11,7 @@ use zeroize::Zeroizing;
 
 use pdsdk::proto;
 
-use crate::api::ApiClient;
+use crate::api::{ApiClient, SignInRequired};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -85,7 +85,7 @@ impl AccountKeys {
         let secret = KeySecret::new(key_password.as_bytes().to_vec());
         let user_keys = UserKeys::new(user.user.keys).unlock(&pgp, &secret);
         if user_keys.unlocked_keys.is_empty() {
-            bail!("no user key could be unlocked");
+            return Err(anyhow::Error::new(SignInRequired::KeysLocked).context("no user key could be unlocked"));
         }
 
         let mut result = Vec::new();
