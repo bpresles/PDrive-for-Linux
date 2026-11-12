@@ -55,8 +55,9 @@ BuildRequires:  pkgconfig(gmodule-2.0)
 
 # fuser is built without libfuse: the daemon calls fusermount3.
 Requires:       fuse3
-# Tokens are stored through the Secret Service API.
-Requires:       (gnome-keyring or kf6-kwallet or keepassxc)
+# Tokens are stored through the Secret Service API. No provider is required on purpose: the
+# desktop brings its own (oo7, GNOME Keyring, KWallet, KeePassXC...), and pulling in a second
+# one makes two Secret Services compete for the session.
 Requires:       hicolor-icon-theme
 Recommends:     gnome-shell-extension-appindicator
 Recommends:     nautilus
@@ -66,6 +67,9 @@ PDrive for Linux mounts Proton Drive as a FUSE file system, with on-demand
 download, offline pinning, sync state emblems and menu entries in Nautilus, a
 desktop application (tray icon, status window) that runs the daemon, and a
 command-line tool.
+
+The session is stored through the Secret Service API: the desktop must provide
+a Secret Service (oo7, GNOME Keyring, KWallet, KeePassXC...).
 
 This is an unofficial third-party client, not affiliated with or endorsed by
 Proton AG. It bundles the Proton Drive SDK and Proton cryptography libraries

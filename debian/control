@@ -22,14 +22,17 @@ Package: pdrive-for-linux
 Architecture: amd64 arm64
 Depends: ${shlibs:Depends}, ${misc:Depends},
  fuse3,
- libnautilus-extension4,
- gnome-keyring | kwallet6 | keepassxc
+ libnautilus-extension4
 Recommends: gnome-shell-extension-appindicator, nautilus
 Description: Unofficial Proton Drive client (FUSE mount, Nautilus integration)
  PDrive for Linux mounts Proton Drive as a FUSE file system, with on-demand
  download, offline pinning, sync state emblems and menu entries in Nautilus, a
  desktop application (tray icon, status window) that runs the daemon, and a
  command-line tool.
+ .
+ The session is stored through the Secret Service API: the desktop must provide
+ a Secret Service (oo7, GNOME Keyring, KWallet, KeePassXC...). None is pulled in
+ as a dependency, so that the one already chosen by the desktop is kept.
  .
  This is an unofficial third-party client, not affiliated with or endorsed by
  Proton AG. It bundles the Proton Drive SDK and Proton cryptography libraries

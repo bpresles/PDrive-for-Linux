@@ -47,7 +47,7 @@ Status: early alpha (the application identifies itself to Proton with the `-alph
 - **Translations** with gettext (French first, see `po/`).
 - **Command-line tool** `pdrive`: `login`, `logout`, `status`, `ls [PATH]`, `selftest`.
 
-The session is kept in the Secret Service keyring (GNOME Keyring, KWallet, ...). The
+The session is kept in the Secret Service keyring (oo7, GNOME Keyring, KWallet, ...). The
 sign-in goes through your browser: PDrive never sees your password. When Proton no longer
 accepts the session (expired or revoked), the application opens the browser sign-in again by
 itself.
@@ -124,7 +124,8 @@ flowchart LR
 - FUSE 3 (`fusermount3`).
 - Development files of GTK 4, libadwaita and GLib, for `pdrive-app`.
 - `gettext` (`msgfmt`) for the translations.
-- A Secret Service provider (for example GNOME Keyring, KeePassXC or KWallet). With KWallet,
+- A Secret Service provider (for example oo7, GNOME Keyring, KeePassXC or KWallet). The
+  packages do not depend on any of them: use the one your desktop already runs. With KWallet,
   the Secret Service interface (`org.freedesktop.secrets`) is provided by `ksecretd` from
   KDE Frameworks 6.14 (Fedora 44 has 6.31). Debian 13 has `kwallet6` 6.13, whose `kwalletd6`
   only offers it as an option: enable it in the KDE Wallet settings ("Use KWallet for the

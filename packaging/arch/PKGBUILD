@@ -25,11 +25,12 @@ url='https://github.com/bpresles/PDrive-for-Linux'
 # GPL-3.0-or-later: this project. Bundled components: see THIRD_PARTY_NOTICES and licenses/*.tsv.
 license=(GPL-3.0-or-later)
 # fuser is built without libfuse: the daemon calls fusermount3.
-# Tokens are stored through the Secret Service API (gnome-keyring, kwallet or keepassxc).
+# Tokens are stored through the Secret Service API. No provider is listed on purpose: the
+# desktop brings its own (oo7, gnome-keyring, kwallet, keepassxc...), and pulling in a second
+# one makes two Secret Services compete for the session.
 depends=(fuse3 gtk4 libadwaita glib2 hicolor-icon-theme)
 makedepends=(cargo gcc make gettext desktop-file-utils pkgconf nautilus xz)
 optdepends=('nautilus: file manager integration (emblems, menu entries)'
-            'gnome-keyring: Secret Service provider to store the session tokens'
             'gnome-shell-extension-appindicator: tray icon on GNOME')
 options=(!lto !debug)
 source=("pdrive-for-linux-$pkgver.tar.xz"
