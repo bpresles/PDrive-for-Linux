@@ -24,7 +24,7 @@
 %global __requires_exclude ^libproton_(drive_sdk|crypto)\\.so.*$
 
 Name:           pdrive-for-linux
-Version:        0.2.2
+Version:        0.3.0
 Release:        1%{?dist}
 Summary:        Unofficial Proton Drive client for Linux (FUSE mount, Nautilus integration)
 # GPL-3.0-or-later: this project. Bundled components, audited 29/10/2026 (THIRD_PARTY_NOTICES,
@@ -165,6 +165,8 @@ done
 %{_datadir}/icons/hicolor/*/*/*.svg
 
 %changelog
+* Thu Nov 12 2026 Bertrand PRESLES <bpresles@gmail.com> - 0.3.0-1
+- Release 0.3.0
 * Fri Nov 06 2026 Bertrand PRESLES <bpresles@gmail.com> - 0.2.2-1
 - Release 0.2.2
 * Wed Nov 04 2026 Bertrand PRESLES <bpresles@gmail.com> - 0.2.1-1
