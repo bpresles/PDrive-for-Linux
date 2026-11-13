@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pdrive\n"
 "Report-Msgid-Bugs-To: https://github.com/bpresles/PDrive-for-Linux/issues\n"
-"POT-Creation-Date: 2026-11-13 19:31+0100\n"
+"POT-Creation-Date: 2026-11-13 19:36+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -406,18 +406,18 @@ msgstr ""
 msgid "Open in the browser"
 msgstr ""
 
-#: extension/pdrive-nautilus.c:333
+#: extension/pdrive-nautilus.c:333 integrations/dolphin/pdriveactions.cpp:38
 msgid "Keep Available Offline"
 msgstr ""
 
-#: extension/pdrive-nautilus.c:334
+#: extension/pdrive-nautilus.c:334 integrations/dolphin/pdriveactions.cpp:39
 msgid "Download and keep available without network"
 msgstr ""
 
-#: extension/pdrive-nautilus.c:336
+#: extension/pdrive-nautilus.c:336 integrations/dolphin/pdriveactions.cpp:44
 msgid "Free Up Space"
 msgstr ""
 
-#: extension/pdrive-nautilus.c:337
+#: extension/pdrive-nautilus.c:337 integrations/dolphin/pdriveactions.cpp:45
 msgid "Remove the downloaded copy, keeping it in the cloud"
 msgstr ""

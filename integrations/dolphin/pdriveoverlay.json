@@ -1,0 +1,7 @@
+{
+    "KPlugin": {
+        "Description": "Sync state emblems of the PDrive for Linux files (unofficial Proton Drive client)",
+        "Id": "pdriveoverlay",
+        "Name": "PDrive for Linux emblems"
+    }
+}
