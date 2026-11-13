@@ -19,7 +19,7 @@ _cloud_ini=io.github.bpresles.PDrive.ini
 pkgname=pdrive-for-linux
 pkgver=0.3.0
 pkgrel=1
-pkgdesc='Unofficial Proton Drive client for Linux (FUSE mount, Nautilus integration)'
+pkgdesc='Unofficial Proton Drive client for Linux (FUSE mount, Nautilus, Dolphin and COSMIC Files integration)'
 arch=(x86_64 aarch64)
 url='https://github.com/bpresles/PDrive-for-Linux'
 # GPL-3.0-or-later: this project. Bundled components: see THIRD_PARTY_NOTICES and licenses/*.tsv.
@@ -29,8 +29,11 @@ license=(GPL-3.0-or-later)
 # desktop brings its own (oo7, gnome-keyring, kwallet, keepassxc...), and pulling in a second
 # one makes two Secret Services compete for the session.
 depends=(fuse3 gtk4 libadwaita glib2 hicolor-icon-theme)
-makedepends=(cargo gcc make gettext desktop-file-utils pkgconf nautilus xz)
-optdepends=('nautilus: file manager integration (emblems, menu entries)'
+# The plugins of a file manager are loaded by it, which brings its libraries (makepkg does not compute
+# library dependencies): nautilus and dolphin are optional, whichever desktops are installed.
+makedepends=(cargo gcc make cmake extra-cmake-modules gettext desktop-file-utils pkgconf nautilus kio xz)
+optdepends=('nautilus: sync state emblems and menu entries in Nautilus'
+            'dolphin: sync state emblems and menu entries in Dolphin'
             'gnome-shell-extension-appindicator: tray icon on GNOME')
 options=(!lto !debug)
 source=("pdrive-for-linux-$pkgver.tar.xz"
@@ -55,6 +58,8 @@ build() {
     export PDSDK_RUNTIME_LIB_DIR=/usr/lib/pdrive
     cargo build --release --frozen --offline -p pdrived -p pdrive -p pdrive-app
     make -C extension LOCALEDIR=/usr/share/locale
+    cmake -S integrations/dolphin -B build-dolphin -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DKDE_INSTALL_LIBDIR=lib
+    cmake --build build-dolphin
 }
 
 check() {
@@ -66,6 +71,12 @@ check() {
         ! grep -q "$PWD/native" "target/release/$b" || { echo "$b refers to the build tree" >&2; return 1; }
         grep -q /usr/lib/pdrive "target/release/$b"
     done
+    # The Dolphin plugins: no /usr/local, no build directory.
+    local plugin
+    for plugin in build-dolphin/bin/kf6/*/*.so; do
+        ! grep -q /usr/local "$plugin" || { echo "$plugin refers to /usr/local" >&2; return 1; }
+        ! grep -q "$PWD" "$plugin" || { echo "$plugin refers to the build tree" >&2; return 1; }
+    done
 }
 
 package() {
@@ -74,6 +85,7 @@ package() {
     install -Dpm0755 native/$_rid/libproton_drive_sdk.so native/$_rid/libproton_crypto.so -t "$pkgdir/usr/lib/pdrive"
 
     make -C extension install DESTDIR="$pkgdir" LOCALEDIR=/usr/share/locale
+    DESTDIR="$pkgdir" cmake --install build-dolphin
 
     install -Dpm0644 packaging/man/*.1 -t "$pkgdir/usr/share/man/man1"
     install -Dpm0644 "packaging/$_cloud_ini" -t "$pkgdir/usr/share/cloud-providers"

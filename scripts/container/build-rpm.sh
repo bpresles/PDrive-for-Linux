@@ -2,7 +2,8 @@
 # Runs inside a Fedora container (local script and GitHub workflow). /dist holds the two
 # sources and receives the RPM and SRPM. Spec taken from the source tarball.
 set -euo pipefail
-dnf -y install rpm-build rpmlint cargo rust gcc make binutils gettext desktop-file-utils \
+dnf -y install rpm-build rpmlint cargo rust gcc gcc-c++ make cmake extra-cmake-modules binutils gettext desktop-file-utils \
+    'cmake(KF6KIO)' 'cmake(KF6CoreAddons)' 'cmake(KF6I18n)' 'cmake(Qt6DBus)' 'cmake(Qt6Widgets)' \
     'pkgconfig(libnautilus-extension-4)' 'pkgconfig(gtk4)' 'pkgconfig(libadwaita-1)' \
     'pkgconfig(glib-2.0)' 'pkgconfig(gio-2.0)' 'pkgconfig(gmodule-2.0)' xz tar
 TOP=/tmp/rpmbuild; mkdir -p "$TOP"/{SOURCES,SPECS}

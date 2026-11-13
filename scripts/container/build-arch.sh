@@ -4,6 +4,7 @@
 # an unprivileged user.
 set -euo pipefail
 pacman -Syu --noconfirm --needed base-devel cargo gettext desktop-file-utils pkgconf nautilus gtk4 libadwaita \
+    cmake extra-cmake-modules kio \
     glib2 fuse3 xz tar namcap git zstd
 useradd --create-home builder
 B=/home/builder/build; mkdir -p "$B"

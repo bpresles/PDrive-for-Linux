@@ -2,5 +2,6 @@
 /third_party/
 /native/linux-x64/
 /extension/*.so
+/integrations/dolphin/build/
 /dist/
 /.superset/config.local.json

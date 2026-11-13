@@ -6,8 +6,9 @@
 > Drive SDK and does not reuse any Proton logo.
 
 PDrive for Linux gives Proton Drive a place in the Linux desktop: your "My files" folder is
-mounted at `~/ProtonDrive`, files are downloaded when you open them, and Nautilus (GNOME Files)
-shows their sync state, with a sidebar entry and a context menu.
+mounted at `~/ProtonDrive`, files are downloaded when you open them, and the file managers show
+it: Nautilus (GNOME Files) and Dolphin (KDE) show the sync state with a context menu, Dolphin and
+COSMIC Files list the drive in their sidebar (see [File managers](#file-managers)).
 
 Status: early alpha (the application identifies itself to Proton with the `-alpha` channel).
 
@@ -32,6 +33,10 @@ Status: early alpha (the application identifies itself to Proton with the `-alph
   files are dropped first, pinned files are kept).
 - **Nautilus extension**: sync state emblems, and the context menu entries "Keep Available
   Offline" and "Free Up Space". Open windows are reloaded when the drive is mounted.
+- **Dolphin plugins** (KDE Frameworks 6): the same emblems and context menu entries, plus a
+  "Proton Drive" entry in the places panel.
+- **COSMIC Files**: a favorite and two context menu actions ("PDrive: Keep Available Offline",
+  "PDrive: Free Up Space"). No emblems: COSMIC Files has no extension API.
 - **Sidebar entry** through libcloudproviders, with a menu (show status, open in the browser,
   mount / unmount).
 - **Desktop application** (`pdrive-app`): tray icon, status window (account, used space,
@@ -45,7 +50,8 @@ Status: early alpha (the application identifies itself to Proton with the `-alph
   on Fedora, already installed on Ubuntu); otherwise the status window is shown with an
   explanation.
 - **Translations** with gettext (French first, see `po/`).
-- **Command-line tool** `pdrive`: `login`, `logout`, `status`, `ls [PATH]`, `selftest`.
+- **Command-line tool** `pdrive`: `login`, `logout`, `status`, `ls [PATH]`, `keep-offline PATH...`,
+  `free-up-space PATH...`, `selftest`.
 
 The session is kept in the Secret Service keyring (oo7, GNOME Keyring, KWallet, ...). The
 sign-in goes through your browser: PDrive never sees your password. When Proton no longer
@@ -109,8 +115,12 @@ flowchart LR
   `packaging/io.github.bpresles.PDrive.ini`.
 - **`pdrive-app`** (GTK4 / libadwaita, application id `io.github.bpresles.PDrive.App`) runs and
   watches the daemon and shows its state. The daemon stops when the application dies.
-- **The Nautilus extension** (`extension/`) asks the daemon over D-Bus for the state of the
-  files it displays.
+- **The Nautilus extension** (`extension/`, C) and **the Dolphin plugins**
+  (`integrations/dolphin/`, C++ / KDE Frameworks 6) ask the daemon over D-Bus for the state of
+  the files they display. Nothing in the daemon is specific to a file manager.
+- **`pdrive-app`** also writes the sidebar entries and menu actions of Dolphin and COSMIC Files in
+  the configuration of the user (`crates/pdrive-app/src/integrations.rs`); COSMIC Files runs
+  `pdrive keep-offline` / `pdrive free-up-space`.
 
 ## Installation
 
@@ -130,8 +140,13 @@ flowchart LR
   KDE Frameworks 6.14 (Fedora 44 has 6.31). Debian 13 has `kwallet6` 6.13, whose `kwalletd6`
   only offers it as an option: enable it in the KDE Wallet settings ("Use KWallet for the
   Secret Service interface") or use another provider.
-- For the Nautilus extension: the development files of `libnautilus-extension-4`
-  (`nautilus-devel` on Fedora) and GTK 4.
+- Optional, one per file manager you want the plugins of: for the Nautilus extension, the
+  development files of `libnautilus-extension-4` (`nautilus-devel` on Fedora) and GTK 4; for the
+  Dolphin plugins, CMake, `extra-cmake-modules` and the development files of KDE Frameworks 6
+  KIO, KCoreAddons, KI18n and Qt 6 (`kf6-kio-devel kf6-kcoreaddons-devel kf6-ki18n-devel
+  qt6-qtbase-devel` on Fedora; `libkf6kio-dev libkf6coreaddons-dev libkf6i18n-dev qt6-base-dev`
+  on Debian 13). `scripts/install-system.sh` builds the ones it finds. COSMIC Files needs
+  nothing to build.
 - On GNOME: the AppIndicator extension, for the tray icon (see above).
 
 ### From source
@@ -141,8 +156,8 @@ git clone https://github.com/bpresles/PDrive-for-Linux.git
 cd PDrive-for-Linux
 
 scripts/install.sh          # as your user
-scripts/install-system.sh   # Nautilus extension and sidebar, needs sudo
-nautilus -q                 # restart Nautilus to load the extension
+scripts/install-system.sh   # Nautilus extension, Dolphin plugins and sidebar, needs sudo
+nautilus -q                 # restart Nautilus to load the extension (Dolphin: close it)
 ```
 
 `scripts/install.sh` builds the native libraries if needed (`scripts/build-native.sh`, which
@@ -157,19 +172,59 @@ in release mode and installs, under your home directory:
 - `~/.local/share/man/man1/`: manual pages `pdrive(1)`, `pdrived(1)` and `pdrive-app(1)`.
 
 `~/.local/bin` must be in your `PATH` to run the commands from a terminal. `scripts/install-system.sh`
-builds the Nautilus extension and installs it in the extension directory of Nautilus, the
-sidebar declaration in `/usr/local/share/cloud-providers/` and the translations of the
-extension in `/usr/local/share/locale/`. It needs `sudo` because Nautilus and libcloudproviders
-only read system directories.
+builds the Nautilus extension (if `libnautilus-extension-4` is found) and installs it in the
+extension directory of Nautilus, builds the Dolphin plugins (if CMake finds KDE Frameworks 6 KIO)
+and installs them in the Qt 6 plugin directory of the system, and installs the sidebar declaration
+in `/usr/local/share/cloud-providers/` and the translations in `/usr/local/share/locale/`. It
+needs `sudo` because Nautilus, Dolphin and libcloudproviders only read system directories.
 
 ### First start
 
 1. Start **PDrive** from the applications menu (or run `pdrive-app`).
 2. Click "Sign in": your browser opens for the Proton sign-in (the window mentions that this
    is an unofficial client). `pdrive login` does the same from a terminal.
-3. The daemon mounts the drive at `~/ProtonDrive`; it is also in the Nautilus sidebar.
+3. The daemon mounts the drive at `~/ProtonDrive`; it is also in the sidebar of the file managers
+   (see below).
 4. After the first sign-in, the application offers to start at login. You can change it in the
    settings (it creates `~/.config/autostart/io.github.bpresles.PDrive.App.desktop`).
+
+### File managers
+
+One installation serves every desktop of the machine: a package (or `install-system.sh`) installs
+the plugin of each file manager, and each plugin is only loaded by its own file manager, so
+switching between GNOME, KDE and COSMIC sessions needs nothing more. The packages require none of
+them (`Suggests: nautilus, dolphin`) and pull no KDE or GNOME library.
+
+| | Nautilus (GNOME) | Dolphin (KDE Plasma) | COSMIC Files |
+|---|---|---|---|
+| Sync state emblems | yes (extension) | yes (`KOverlayIconPlugin`) | no: no extension API |
+| "Keep Available Offline" / "Free Up Space" | file menu | file menu, only on drive files | file menu, on **every** file (see below) |
+| Sidebar entry | libcloudproviders (system-wide) | "Proton Drive" in Places (`user-places.xbel`) | favorite |
+
+`pdrive-app` sets up the Dolphin places entry and the COSMIC Files favorite and actions in your
+own configuration (a package cannot write it), at every start, according to the file managers
+**installed**, not to the session you are running: with COSMIC and Dolphin both installed, the
+Dolphin entry is added from a COSMIC session too. A file manager installed later is taken into
+account at the next start of `pdrive-app`.
+
+- Dolphin: `$XDG_DATA_HOME/user-places.xbel` is only changed if it exists (Dolphin creates it at
+  its first start), with a marker so that only our entry is touched.
+- COSMIC Files (when `com.system76.CosmicFiles.desktop` is installed):
+  `~/.config/cosmic/com.system76.CosmicFiles/v1/favorites` and `.../context_actions`. COSMIC Files
+  cannot limit an action to a folder: "PDrive: Keep Available Offline" and "PDrive: Free Up Space"
+  appear on every file, and run `pdrive keep-offline` / `pdrive free-up-space`, which ignore paths
+  outside the drive and say so in a notification. If `pdrive` is not in the `PATH` of the session
+  (for example `~/.local/bin`), the actions use its full path. The favorite is recognised by the
+  mount point: turning the integration off removes it, even if you had added it by hand.
+- The switch "Add PDrive to the file managers (sidebar, menus)" in the settings
+  (`file_manager_integration`, on by default) removes these entries when turned off.
+  `pdrive-app --remove-integrations` removes them and exits (`scripts/uninstall.sh` runs it).
+  Removing a package does not touch your configuration files: run it first.
+- Nautilus is unchanged: no bookmark is added, its sidebar entry comes from libcloudproviders.
+- The "Open folder" button opens the folder with the default application of your system, as
+  before.
+- Not available: emblems in COSMIC Files (no API), Nemo, Thunar, Caja. The AppImage contains
+  none of the plugins (they live in system directories), like the Nautilus extension.
 
 ### Packages
 
@@ -223,7 +278,9 @@ Without a journal, the log is `$XDG_STATE_HOME/pdrive/pdrive.log` (by default
 - Files "Shared with me" and Photos are not handled.
 - `O_NOATIME` is refused on files that are not in the cache.
 - Deleting a file moves it directly to the Proton trash, not to the Nautilus trash.
-- Rendering on KDE and GNOME, and the translated Nautilus menus, still need more real-world testing.
+- Rendering on KDE and GNOME, and the translated Nautilus and Dolphin menus, still need more real-world testing.
+- COSMIC Files shows no state emblems (no extension API), and its two PDrive actions appear on every
+  file (they do nothing outside the drive).
 - Keep a single Secret Service on the desktop. With two of them installed (for example GNOME
   Keyring and oo7), whichever starts first at login answers, each with its own copy of the
   session; Proton renews the session regularly and refuses the outdated copy, which then asks
@@ -239,7 +296,8 @@ the files of an RPM or DEB package. The equivalent by hand, after quitting PDriv
 menu (it unmounts the drive):
 
 ```sh
-# User files
+# User files (first remove the entries added to Dolphin and COSMIC Files)
+pdrive-app --remove-integrations
 rm -f ~/.local/bin/{pdrive-app,pdrived,pdrive}
 rm -rf ~/.local/lib/pdrive
 rm -f ~/.local/share/applications/io.github.bpresles.PDrive.App.desktop
@@ -250,10 +308,14 @@ rm -f ~/.local/share/man/man1/{pdrive,pdrived,pdrive-app}.1
 
 # System files
 sudo rm -f "$(pkg-config --variable=extensiondir libnautilus-extension-4)/libpdrive-nautilus.so"
+sudo rm -f "$(qtpaths6 --query QT_INSTALL_PLUGINS)"/kf6/{overlayicon/pdriveoverlay,kfileitemaction/pdriveactions}.so
 sudo rm -f /usr/local/share/cloud-providers/io.github.bpresles.PDrive.ini
 sudo rm -f /usr/local/share/locale/*/LC_MESSAGES/pdrive.mo
-nautilus -q
+nautilus -q    # and close Dolphin
 ```
+
+With a package installation, run `pdrive-app --remove-integrations` before removing the package:
+the package does not touch your configuration files.
 
 Your data: `pdrive logout` first removes the session from the keyring and revokes it. Then,
 if you want, delete `~/.config/pdrive/`, `~/.cache/pdrive/` (note: this loses uploads still

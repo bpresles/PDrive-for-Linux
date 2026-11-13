@@ -23,10 +23,17 @@
 %global __provides_exclude_from ^%{_libdir}/pdrive/.*$
 %global __requires_exclude ^libproton_(drive_sdk|crypto)\\.so.*$
 
+# Plugins of the file managers: Qt plugin directory of the Dolphin plugins (KDE Frameworks 6).
+%global qt6_plugins %{_libdir}/qt6/plugins
+# One package serves every desktop installed on the machine: the plugins are loaded by their own
+# file manager, which brings its libraries (libnautilus-extension, KF6, Qt6). They must not
+# require them, or a GNOME user would get KDE libraries and the other way round.
+%global __requires_exclude_from ^(%{_libdir}/nautilus/extensions-4|%{qt6_plugins}/kf6)/.*$
+
 Name:           pdrive-for-linux
 Version:        0.3.0
 Release:        1%{?dist}
-Summary:        Unofficial Proton Drive client for Linux (FUSE mount, Nautilus integration)
+Summary:        Unofficial Proton Drive client for Linux (FUSE mount, Nautilus, Dolphin and COSMIC Files integration)
 # GPL-3.0-or-later: this project. Bundled components, audited 29/10/2026 (THIRD_PARTY_NOTICES,
 # licenses/*.tsv): MIT (Proton SDK and cryptography, .NET runtime and Microsoft NuGet packages,
 # most Rust crates), Apache-2.0, BSD-3-Clause, ISC, Zlib, Unicode-3.0, Unlicense, CDLA-Permissive-2.0
@@ -40,6 +47,9 @@ Source1:        %{url}/releases/download/v%{version}/pdrive-native-%{native_rid}
 ExclusiveArch:  x86_64 aarch64
 
 BuildRequires:  gcc
+BuildRequires:  gcc-c++
+BuildRequires:  cmake
+BuildRequires:  extra-cmake-modules
 BuildRequires:  make
 BuildRequires:  cargo >= 1.92
 BuildRequires:  rust >= 1.92
@@ -47,6 +57,11 @@ BuildRequires:  binutils
 BuildRequires:  gettext
 BuildRequires:  desktop-file-utils
 BuildRequires:  pkgconfig(libnautilus-extension-4)
+BuildRequires:  cmake(KF6KIO)
+BuildRequires:  cmake(KF6CoreAddons)
+BuildRequires:  cmake(KF6I18n)
+BuildRequires:  cmake(Qt6DBus)
+BuildRequires:  cmake(Qt6Widgets)
 BuildRequires:  pkgconfig(gtk4) >= 4.12
 BuildRequires:  pkgconfig(libadwaita-1) >= 1.6
 BuildRequires:  pkgconfig(glib-2.0)
@@ -60,13 +75,17 @@ Requires:       fuse3
 # one makes two Secret Services compete for the session.
 Requires:       hicolor-icon-theme
 Recommends:     gnome-shell-extension-appindicator
-Recommends:     nautilus
+# No file manager is favored: each one gets its plugin, and none is required.
+Suggests:       nautilus
+Suggests:       dolphin
 
 %description
 PDrive for Linux mounts Proton Drive as a FUSE file system, with on-demand
-download, offline pinning, sync state emblems and menu entries in Nautilus, a
+download, offline pinning, sync state emblems and menu entries in Nautilus and
+Dolphin, entries in the sidebar and menus of Dolphin and COSMIC Files, a
 desktop application (tray icon, status window) that runs the daemon, and a
-command-line tool.
+command-line tool. The plugins of a file manager are only loaded by it: none
+is required, and several desktops can be installed side by side.
 
 The session is stored through the Secret Service API: the desktop must provide
 a Secret Service (oo7, GNOME Keyring, KWallet, KeePassXC...).
@@ -97,11 +116,16 @@ cargo build --release --frozen --offline -p pdrived -p pdrive -p pdrive-app
 %set_build_flags
 make -C extension LOCALEDIR=%{_datadir}/locale
 
+# Dolphin plugins (CXXFLAGS and LDFLAGS come from the environment set above).
+cmake -S integrations/dolphin -B build-dolphin -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=%{_prefix} -DKDE_INSTALL_LIBDIR=%{_lib}
+cmake --build build-dolphin %{?_smp_mflags}
+
 %install
 install -Dpm0755 target/release/pdrive target/release/pdrived target/release/pdrive-app -t %{buildroot}%{_bindir}
 install -Dpm0755 native/%{native_rid}/libproton_drive_sdk.so native/%{native_rid}/libproton_crypto.so -t %{buildroot}%{_libdir}/pdrive
 
 make -C extension install DESTDIR=%{buildroot} LOCALEDIR=%{_datadir}/locale EXTENSION_DIR=%{_libdir}/nautilus/extensions-4
+DESTDIR=%{buildroot} cmake --install build-dolphin
 
 install -Dpm0644 packaging/man/*.1 -t %{buildroot}%{_mandir}/man1
 install -Dpm0644 packaging/%{cloud_ini} %{buildroot}%{_datadir}/cloud-providers/%{cloud_ini}
@@ -123,6 +147,12 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{app_id}.desktop
 grep -q '^BusName=' %{buildroot}%{_datadir}/cloud-providers/%{cloud_ini}
 # The extension must carry the system locale directory, not /usr/local.
 ! grep -q /usr/local %{buildroot}%{_libdir}/nautilus/extensions-4/libpdrive-nautilus.so
+# The Dolphin plugins: no /usr/local, no build directory.
+for plugin in %{buildroot}%{qt6_plugins}/kf6/overlayicon/pdriveoverlay.so %{buildroot}%{qt6_plugins}/kf6/kfileitemaction/pdriveactions.so; do
+    test -f "$plugin"
+    ! grep -q /usr/local "$plugin"
+    ! grep -q "$PWD" "$plugin"
+done
 # The binaries must find the private libraries through the installed rpath only.
 # and must not refer to the build tree (the SDK loads libproton_crypto.so from that path).
 for b in pdrive pdrived; do
@@ -160,6 +190,11 @@ done
 %{_libdir}/pdrive/libproton_drive_sdk.so
 %{_libdir}/pdrive/libproton_crypto.so
 %{_libdir}/nautilus/extensions-4/libpdrive-nautilus.so
+%dir %{qt6_plugins}/kf6
+%dir %{qt6_plugins}/kf6/overlayicon
+%dir %{qt6_plugins}/kf6/kfileitemaction
+%{qt6_plugins}/kf6/overlayicon/pdriveoverlay.so
+%{qt6_plugins}/kf6/kfileitemaction/pdriveactions.so
 %{_datadir}/cloud-providers/%{cloud_ini}
 %{_datadir}/applications/%{app_id}.desktop
 %{_datadir}/icons/hicolor/*/*/*.svg
