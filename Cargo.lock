@@ -2727,7 +2727,7 @@ dependencies = [
 
 [[package]]
 name = "pdcore"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -2748,14 +2748,14 @@ dependencies = [
 
 [[package]]
 name = "pdi18n"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "gettext-rs",
 ]
 
 [[package]]
 name = "pdrive"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "gio",
@@ -2768,7 +2768,7 @@ dependencies = [
 
 [[package]]
 name = "pdrive-app"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -2786,7 +2786,7 @@ dependencies = [
 
 [[package]]
 name = "pdrived"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "fuser",
@@ -2809,7 +2809,7 @@ dependencies = [
 
 [[package]]
 name = "pdsdk"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "prost",
  "prost-types",

@@ -31,7 +31,7 @@
 %global __requires_exclude_from ^(%{_libdir}/nautilus/extensions-4|%{qt6_plugins}/kf6)/.*$
 
 Name:           pdrive-for-linux
-Version:        0.3.0
+Version:        0.4.0
 Release:        1%{?dist}
 Summary:        Unofficial Proton Drive client for Linux (FUSE mount, file manager integration)
 # GPL-3.0-or-later: this project. Bundled components, audited 29/10/2026 (THIRD_PARTY_NOTICES,
@@ -200,6 +200,8 @@ done
 %{_datadir}/icons/hicolor/*/*/*.svg
 
 %changelog
+* Fri Nov 13 2026 Bertrand PRESLES <bpresles@gmail.com> - 0.4.0-1
+- Release 0.4.0
 * Thu Nov 12 2026 Bertrand PRESLES <bpresles@gmail.com> - 0.3.0-1
 - Release 0.3.0
 * Fri Nov 06 2026 Bertrand PRESLES <bpresles@gmail.com> - 0.2.2-1
