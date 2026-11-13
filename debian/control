@@ -31,7 +31,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  fuse3
 Recommends: gnome-shell-extension-appindicator
 Suggests: nautilus, dolphin
-Description: Unofficial Proton Drive client (FUSE mount, Nautilus, Dolphin and COSMIC Files integration)
+Description: Unofficial Proton Drive client (FUSE mount, file manager integration)
  PDrive for Linux mounts Proton Drive as a FUSE file system, with on-demand
  download, offline pinning, sync state emblems and menu entries in Nautilus and
  Dolphin, entries in the sidebar and menus of Dolphin and COSMIC Files, a

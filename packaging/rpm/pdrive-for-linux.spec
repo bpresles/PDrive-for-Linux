@@ -33,7 +33,7 @@
 Name:           pdrive-for-linux
 Version:        0.3.0
 Release:        1%{?dist}
-Summary:        Unofficial Proton Drive client for Linux (FUSE mount, Nautilus, Dolphin and COSMIC Files integration)
+Summary:        Unofficial Proton Drive client for Linux (FUSE mount, file manager integration)
 # GPL-3.0-or-later: this project. Bundled components, audited 29/10/2026 (THIRD_PARTY_NOTICES,
 # licenses/*.tsv): MIT (Proton SDK and cryptography, .NET runtime and Microsoft NuGet packages,
 # most Rust crates), Apache-2.0, BSD-3-Clause, ISC, Zlib, Unicode-3.0, Unlicense, CDLA-Permissive-2.0
