@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Bertrand Presles
 //! State shared by the FUSE callbacks and the event watcher.
 
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -14,6 +15,7 @@ use pdsdk::proto::{ThumbnailType, file_thumbnail};
 
 use crate::activity::{ActivityLog, Kind};
 use crate::content::{ContentCache, Opened};
+use crate::listing::InFlight;
 use crate::pins::Pins;
 use crate::replay::{self, Replay};
 use crate::thumbnails::ThumbnailCache;
@@ -22,6 +24,9 @@ use crate::writes::Staging;
 
 /// Fetching the thumbnails of a folder listing gives up after this delay.
 const THUMBNAILS_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Folder listings made ahead of time at once.
+const PREFETCH_PARALLELISM: usize = 4;
 
 /// A remote change waiting to be applied by the FUSE callback that the watcher triggers
 /// through the mount (so that the kernel emits inotify events for it).
@@ -79,6 +84,13 @@ pub struct Drive {
     /// Serializes replays through the mount (see `replay.rs`).
     pub replay_lock: tokio::sync::Mutex<()>,
     deferred: Mutex<Vec<Invalidation>>,
+    /// Folder listings in flight.
+    listings: InFlight,
+    /// Sub-folders queued or being listed ahead of time.
+    prefetching: Mutex<HashSet<u64>>,
+    prefetch_slots: tokio::sync::Semaphore,
+    /// Files with a Proton thumbnail in folders listed ahead of time, by folder.
+    deferred_thumbnails: Mutex<HashMap<u64, Vec<NodeInfo>>>,
 }
 
 impl Drive {
@@ -117,6 +129,10 @@ impl Drive {
             pending: Mutex::new(None),
             replay_lock: tokio::sync::Mutex::new(()),
             deferred: Mutex::new(Vec::new()),
+            listings: InFlight::default(),
+            prefetching: Mutex::new(HashSet::new()),
+            prefetch_slots: tokio::sync::Semaphore::new(PREFETCH_PARALLELISM),
+            deferred_thumbnails: Mutex::new(HashMap::new()),
         }
     }
 
@@ -189,8 +205,55 @@ impl Drive {
         Ok(nodes.into_iter().filter_map(NodeInfo::from_node).collect())
     }
 
-    /// Makes sure the listing of a folder is loaded.
+    /// Makes sure the listing of a folder is loaded, and lists its sub-folders in the background
+    /// (see [`Drive::prefetch_subfolders`]).
     pub async fn load_children(self: &Arc<Self>, ino: u64) -> Result<(), Errno> {
+        self.load_folder(ino, true).await?;
+        // Thumbnails of a folder listed ahead of time are fetched when the user gets there.
+        let deferred = self.deferred_thumbnails.lock().unwrap_or_else(|e| e.into_inner()).remove(&ino);
+        if let Some(nodes) = deferred {
+            let drive = self.clone();
+            tokio::spawn(async move { drive.ensure_thumbnails(nodes).await });
+        }
+        self.prefetch_subfolders(ino);
+        Ok(())
+    }
+
+    /// Lists, in the background, the sub-folders of a folder that the user is looking at, so
+    /// that opening one of them (or a file manager counting its items) does not wait for the
+    /// network. One level only, at most [`PREFETCH_PARALLELISM`] requests at a time.
+    ///
+    /// This is not polling: each folder is listed at most once, because the user listed its
+    /// parent, and never listed again by this code; later changes come from the Drive events
+    /// (`watch.rs`). A folder whose listing fails is only retried when the user looks at its
+    /// parent again. Thumbnails are not fetched for these listings (see `load_folder`).
+    fn prefetch_subfolders(self: &Arc<Self>, ino: u64) {
+        let subfolders = self.tree().unloaded_subfolders(ino);
+        for subfolder in subfolders {
+            // Already queued by a previous listing of the parent.
+            if !self.prefetching.lock().unwrap_or_else(|e| e.into_inner()).insert(subfolder) {
+                continue;
+            }
+            let drive = self.clone();
+            tokio::spawn(async move {
+                if let Ok(_slot) = drive.prefetch_slots.acquire().await {
+                    // An error is logged by `load_folder`; the user's own request will retry.
+                    let _ = drive.load_folder(subfolder, false).await;
+                }
+                drive.prefetching.lock().unwrap_or_else(|e| e.into_inner()).remove(&subfolder);
+            });
+        }
+    }
+
+    /// Loads the listing of a folder unless it is loaded. Requests for a folder already being
+    /// listed wait for that listing. Thumbnails of the files are only fetched for a listing the
+    /// user asked for: for the others (prefetch) they are kept for later, because fetching them
+    /// costs requests and writes into the thumbnail cache for folders nobody may open.
+    async fn load_folder(self: &Arc<Self>, ino: u64, wanted_by_user: bool) -> Result<(), Errno> {
+        self.listings.run(ino, self.fetch_folder(ino, wanted_by_user)).await
+    }
+
+    async fn fetch_folder(self: &Arc<Self>, ino: u64, wanted_by_user: bool) -> Result<(), Errno> {
         let uid = {
             let tree = self.tree();
             let entry = tree.get(ino).ok_or(Errno::ENOENT)?;
@@ -207,15 +270,22 @@ impl Drive {
         let with_thumbnails: Vec<NodeInfo> = children.iter().filter(|n| matches!(n.kind, NodeKind::File { has_thumbnail: true, .. })).cloned().collect();
         {
             let mut tree = self.tree();
-            // Another request may have loaded it meanwhile, or the folder may be gone.
+            // The folder may be gone, or loaded meanwhile by a change event.
             if tree.get(ino).is_none() || tree.is_loaded(ino) {
                 return Ok(());
             }
             tree.set_children(ino, children);
         }
-        // In the background: the listing must not wait for thumbnails.
-        let drive = self.clone();
-        tokio::spawn(async move { drive.ensure_thumbnails(with_thumbnails).await });
+        if with_thumbnails.is_empty() {
+            return Ok(());
+        }
+        if wanted_by_user {
+            // In the background: the listing must not wait for thumbnails.
+            let drive = self.clone();
+            tokio::spawn(async move { drive.ensure_thumbnails(with_thumbnails).await });
+        } else {
+            self.deferred_thumbnails.lock().unwrap_or_else(|e| e.into_inner()).insert(ino, with_thumbnails);
+        }
         Ok(())
     }
 
