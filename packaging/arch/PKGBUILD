@@ -34,6 +34,12 @@ depends=(fuse3 gtk4 libadwaita glib2 hicolor-icon-theme)
 makedepends=(cargo gcc make cmake extra-cmake-modules gettext desktop-file-utils pkgconf nautilus kio xz)
 optdepends=('nautilus: sync state emblems and menu entries in Nautilus'
             'dolphin: sync state emblems and menu entries in Dolphin'
+            # Libraries of the Dolphin plugins, brought by dolphin: listed so that namcap knows
+            # they are optional on purpose (one package for every desktop).
+            'qt6-base: Dolphin plugins'
+            'kio: Dolphin plugins'
+            'kcoreaddons: Dolphin plugins'
+            'ki18n: Dolphin plugins'
             'gnome-shell-extension-appindicator: tray icon on GNOME')
 options=(!lto !debug)
 source=("pdrive-for-linux-$pkgver.tar.xz"
