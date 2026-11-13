@@ -1,5 +1,6 @@
 crates/pdrive/src/offline.rs
 crates/pdrive-app/src/about.rs
+crates/pdrive-app/src/integrations.rs
 crates/pdrive-app/src/main.rs
 crates/pdrive-app/src/settings.rs
 crates/pdrive-app/src/tray.rs

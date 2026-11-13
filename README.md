@@ -190,6 +190,8 @@ mountpoint = "~/ProtonDrive"
 cache_size_gib = 10
 # Whether launching pdrive-app opens its status window (read by pdrive-app only).
 show_window_at_startup = true
+# Whether pdrive-app adds the drive to the file managers (Dolphin, COSMIC Files).
+file_manager_integration = true
 ```
 
 | Key | Default | Meaning |
@@ -197,6 +199,7 @@ show_window_at_startup = true
 | `mountpoint` | `"~/ProtonDrive"` | Folder where the drive appears (a symbolic link to the hidden real mount). |
 | `cache_size_gib` | `10` | Size limit of the cache of downloaded files, in GiB. |
 | `show_window_at_startup` | `true` | Open the status window when `pdrive-app` is started by hand. It is never opened with `--background` (start at login). |
+| `file_manager_integration` | `true` | Add the drive to the sidebar and menus of Dolphin and COSMIC Files (switch in the settings; see [File managers](#file-managers)). |
 
 Other locations: the content cache and the pending uploads are under `~/.cache/pdrive/`; the
 hidden mount and the list of pinned files (`pinned.json`) are under `~/.local/share/pdrive/`. Setting `PDRIVE_VERBOSE=1`

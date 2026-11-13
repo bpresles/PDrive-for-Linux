@@ -7,6 +7,7 @@ use std::rc::Rc;
 use adw::prelude::*;
 
 use crate::config::{self, Settings};
+use crate::integrations;
 use crate::update::RELEASES_URL;
 use crate::window::open_uri;
 use pdi18n::{tr, tr_fmt};
@@ -59,6 +60,21 @@ pub fn show(
         }
     });
     startup.add(&show_window);
+    let file_managers =
+        adw::SwitchRow::builder().title(tr("Add PDrive to the file managers (sidebar, menus)")).active(config::file_manager_integration()).build();
+    let toaster = dialog.clone();
+    file_managers.connect_active_notify(move |row| {
+        if let Err(e) = config::set_file_manager_integration(row.is_active()) {
+            toaster.add_toast(adw::Toast::new(&format!("{}: {e}", tr("Cannot change the file manager setting"))));
+            return;
+        }
+        let errors = integrations::apply_from_settings();
+        if !errors.is_empty() {
+            toaster.add_toast(adw::Toast::new(&tr("Some file managers could not be updated. See the logs of the application.")));
+        }
+        integrations::report(errors);
+    });
+    startup.add(&file_managers);
     page.add(&startup);
 
     let updates = adw::PreferencesGroup::new();
@@ -128,8 +144,12 @@ pub fn show(
         if mountpoint.is_empty() || (mountpoint == current.mountpoint && size == current.cache_size_gib) {
             return;
         }
+        let saved_mountpoint = mountpoint.clone();
         match config::save(&Settings { mountpoint, cache_size_gib: size }) {
-            Ok(()) => restart_daemon(),
+            Ok(()) => {
+                integrations::report(integrations::mount_point_changed(&current.mountpoint, &saved_mountpoint));
+                restart_daemon();
+            }
             Err(e) => eprintln!("cannot save the settings: {e:#}"),
         }
     });

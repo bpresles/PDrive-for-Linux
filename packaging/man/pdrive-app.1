@@ -1,11 +1,13 @@
 .\" SPDX-License-Identifier: GPL-3.0-or-later
 .\" Copyright (C) 2026 Bertrand Presles
-.TH PDRIVE-APP 1 "October 2026" "PDrive for Linux" "User Commands"
+.TH PDRIVE-APP 1 "November 2026" "PDrive for Linux" "User Commands"
 .SH NAME
 pdrive-app \- desktop application of PDrive for Linux (tray icon, status window)
 .SH SYNOPSIS
 .B pdrive-app
 .RB [ \-\-background ]
+.br
+.B pdrive-app \-\-remove\-integrations
 .SH DESCRIPTION
 .B pdrive-app
 is the desktop application of PDrive for Linux, an unofficial Proton Drive
@@ -33,6 +35,42 @@ extension. PDrive for Linux is not affiliated with, or endorsed by, Proton AG.
 Start without opening the status window. Used by the autostart entry, which
 the settings window creates in
 .IR ~/.config/autostart .
+.TP
+.B \-\-remove\-integrations
+Remove the entries added to the file managers (see
+.BR "FILE MANAGERS" )
+and exit. The uninstall script runs it.
+.SH FILE MANAGERS
+At every start, when the setting
+.B file_manager_integration
+is on (the default; the settings window has a switch), the application adds the
+drive to the file managers that are installed, whatever the current desktop
+session is. Nautilus needs nothing: its sidebar entry comes from the
+CloudProviders interface.
+.TP
+.B Dolphin
+An entry "Proton Drive" in
+.IR $XDG_DATA_HOME/user-places.xbel ,
+only when that file already exists.
+.TP
+.B COSMIC Files
+Only if
+.I com.system76.CosmicFiles.desktop
+is installed: a favorite in
+.I ~/.config/cosmic/com.system76.CosmicFiles/v1/favorites
+and two context-menu actions in
+.I .../v1/context_actions
+that run
+.BR "pdrive keep\-offline" " and " "pdrive free\-up\-space"
+(see
+.BR pdrive (1)).
+COSMIC Files cannot limit them to the drive, so they appear on every file and
+do nothing, with a notification, outside it.
+.PP
+Only the entries recognised as ours are changed or removed; the rest of the
+files is left as it is. Packages never touch these user files: run
+.B pdrive\-app \-\-remove\-integrations
+before removing the package to clean them up.
 .SH ENVIRONMENT
 .TP
 .B PDRIVE_VERBOSE
