@@ -18,8 +18,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use fuser::{
-    BsdFileFlags, Errno, FileAttr, FileHandle, FileType, Filesystem, FopenFlags, Generation, INodeNo, LockOwner, OpenAccMode, OpenFlags, RenameFlags,
-    ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite, Request, TimeOrNow, WriteFlags,
+    BsdFileFlags, Errno, FileAttr, FileHandle, FileType, Filesystem, FopenFlags, Generation, INodeNo, KernelConfig, LockOwner, OpenAccMode, OpenFlags,
+    RenameFlags, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite, Request, TimeOrNow, WriteFlags,
 };
 
 use crate::content::{Opened, Transfer};
@@ -29,6 +29,8 @@ use crate::tree::{Entry, EntryKind};
 /// Attributes may be cached briefly; remote changes are pushed with explicit invalidations.
 const TTL: Duration = Duration::from_secs(1);
 const BLOCK_SIZE: u32 = 4096;
+/// Largest read-ahead requested from the kernel (see `Filesystem::init`).
+const MAX_READAHEAD: u32 = crate::content::HEAD_LENGTH as u32;
 
 #[derive(Clone, Copy)]
 struct Owner {
@@ -189,6 +191,15 @@ fn caller_name(req: &Request) -> Option<String> {
 }
 
 impl Filesystem for DriveFs {
+    fn init(&mut self, _req: &Request, config: &mut KernelConfig) -> std::io::Result<()> {
+        // The kernel reads ahead of the application: a read of 18 730 bytes (type sniffing) at
+        // the start of a file becomes a 64 KiB request with the default window, which goes
+        // beyond the cached head and would download the whole content. Never ask for more than
+        // the head. Too large a value is refused with the nearest valid one: ignore it.
+        let _ = config.set_max_readahead(MAX_READAHEAD);
+        Ok(())
+    }
+
     fn lookup(&self, _req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEntry) {
         let Some(name) = name.to_str().map(str::to_owned) else {
             return reply.error(Errno::ENOENT);

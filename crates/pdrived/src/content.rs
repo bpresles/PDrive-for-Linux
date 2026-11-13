@@ -6,16 +6,17 @@
 //! reads are served as soon as the requested range has been written. The SDK delivers the
 //! content in order, so a read waits until the download has reached the end of its range.
 //!
-//! A download nobody reads any more is cancelled after a grace period, so that a program reading
-//! only the beginning of a big file does not fetch all of it. What was received is kept as the
-//! "head" of the file, which serves later reads of that beginning (e.g. content type sniffing)
-//! without downloading again.
+//! A download nobody reads any more is cancelled, so that a program reading only the beginning
+//! of a big file does not fetch all of it: at once (as soon as the head is written) if the last
+//! reader never went beyond the head, after a grace period otherwise. What was received is kept
+//! as the "head" of the file, which serves later reads of that beginning (e.g. content type
+//! sniffing) without downloading again.
 
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -25,8 +26,12 @@ use crate::activity::{ActivityLog, Kind, State};
 use tokio::sync::watch;
 
 const IDLE_CANCEL_DELAY: Duration = Duration::from_secs(20);
-/// Smallest beginning worth keeping: GIO sniffs at most 16 KiB.
-pub const HEAD_LENGTH: u64 = 16 * 1024;
+/// Smallest beginning worth keeping: GIO sniffs at most 16 KiB and `xdg-mime` (COSMIC Files)
+/// 18 730 bytes, the longest magic number range of shared-mime-info. It is also the largest
+/// read-ahead the kernel is allowed (see `fs.rs`), so that sniffing a file never goes beyond it.
+/// Heads cached with a shorter length (older versions kept 16 KiB) are still served for the reads
+/// they cover; longer reads download the content, which then replaces them.
+pub const HEAD_LENGTH: u64 = 32 * 1024;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Progress {
@@ -39,6 +44,8 @@ pub enum Progress {
 pub struct Transfer {
     progress: watch::Receiver<Progress>,
     readers: AtomicUsize,
+    /// End of the furthest range any reader asked for.
+    read_end: AtomicU64,
     cancelled: AtomicBool,
     cancellation: Option<CancellationToken>,
     runtime: tokio::runtime::Handle,
@@ -46,10 +53,26 @@ pub struct Transfer {
 
 impl Transfer {
     /// Waits until `end` bytes are available (or the download ended). Returns false on failure.
+    /// Records the range as read.
     pub async fn wait_for(&self, end: u64) -> bool {
+        self.read_end.fetch_max(end, Ordering::SeqCst);
+        self.wait_written(end).await
+    }
+
+    async fn wait_written(&self, end: u64) -> bool {
         let mut progress = self.progress.clone();
         let result = progress.wait_for(|p| !matches!(p, Progress::Running(written) if *written < end)).await;
         matches!(result.as_deref(), Ok(Progress::Running(_) | Progress::Done))
+    }
+
+    /// Whether nobody reads this download and nobody read further than the head: the rest is
+    /// not wanted (type sniffing, thumbnails of what is already known…).
+    fn only_head_wanted(&self) -> bool {
+        self.readers.load(Ordering::SeqCst) == 0 && self.read_end.load(Ordering::SeqCst) <= HEAD_LENGTH
+    }
+
+    fn running(&self) -> bool {
+        matches!(*self.progress.borrow(), Progress::Running(_))
     }
 
     /// Cancels the download (once). Callable from any thread.
@@ -199,6 +222,7 @@ impl ContentCache {
         let transfer = Arc::new(Transfer {
             progress: receiver,
             readers: AtomicUsize::new(1),
+            read_end: AtomicU64::new(0),
             cancelled: AtomicBool::new(false),
             cancellation: Some(cancellation),
             runtime: self.runtime.clone(),
@@ -302,13 +326,27 @@ impl ContentCache {
         if transfer.readers.fetch_sub(1, Ordering::SeqCst) != 1 {
             return;
         }
-        self.runtime.spawn(async move {
-            tokio::time::sleep(IDLE_CANCEL_DELAY).await;
-            let running = matches!(*transfer.progress.borrow(), Progress::Running(_));
-            if running && transfer.readers.load(Ordering::SeqCst) == 0 {
-                transfer.cancel();
-            }
-        });
+        self.runtime.spawn(cancel_when_unwanted(transfer, IDLE_CANCEL_DELAY));
+    }
+}
+
+/// Cancels a download nobody reads any more: once its head is written if no reader went beyond
+/// the head, otherwise after `idle_delay` (a reader may come back, e.g. a copy resuming).
+async fn cancel_when_unwanted(transfer: Arc<Transfer>, idle_delay: Duration) {
+    if transfer.only_head_wanted() {
+        transfer.wait_written(HEAD_LENGTH).await;
+        if transfer.running() && transfer.only_head_wanted() {
+            transfer.cancel();
+            return;
+        }
+        // Finished meanwhile, or someone else reads it now (its own release decides).
+        if !transfer.running() || transfer.readers.load(Ordering::SeqCst) > 0 {
+            return;
+        }
+    }
+    tokio::time::sleep(idle_delay).await;
+    if transfer.running() && transfer.readers.load(Ordering::SeqCst) == 0 {
+        transfer.cancel();
     }
 }
 
@@ -495,10 +533,106 @@ mod tests {
         Transfer {
             progress: receiver,
             readers: AtomicUsize::new(1),
+            read_end: AtomicU64::new(0),
             cancelled: AtomicBool::new(false),
             cancellation: None,
             runtime: tokio::runtime::Handle::current(),
         }
+    }
+
+    #[test]
+    fn the_head_covers_what_sniffers_read() {
+        // xdg-mime reads up to 18 730 bytes, GIO 16 KiB.
+        const { assert!(HEAD_LENGTH >= 18_730 && HEAD_LENGTH >= 16 * 1024) };
+        assert_eq!(HEAD_LENGTH, 32 * 1024);
+    }
+
+    #[test]
+    fn keep_head_keeps_what_is_longer_than_the_head() {
+        let dir = tempfile::tempdir().unwrap();
+        let (partial, head) = (dir.path().join("x.part"), dir.path().join("x.head"));
+        std::fs::write(&partial, vec![1u8; 4 * 1024 * 1024]).unwrap();
+        keep_head(&partial, &head, 4 * 1024 * 1024);
+        assert_eq!(std::fs::metadata(&head).unwrap().len(), 4 * 1024 * 1024);
+        // An old 16 KiB head is now too short to be kept from a new download.
+        std::fs::write(&partial, vec![1u8; 16 * 1024]).unwrap();
+        std::fs::remove_file(&head).unwrap();
+        keep_head(&partial, &head, 16 * 1024);
+        assert!(!head.exists());
+    }
+
+    #[tokio::test]
+    async fn a_reader_stopping_inside_the_head_cancels_once_the_head_is_written() {
+        let (sender, receiver) = watch::channel(Progress::Running(0));
+        let transfer = Arc::new(transfer(receiver));
+        // Reads what a sniffer reads, then closes.
+        assert!(!transfer.only_head_wanted());
+        transfer.readers.fetch_sub(1, Ordering::SeqCst);
+        assert!(transfer.only_head_wanted());
+        let task = tokio::spawn(cancel_when_unwanted(transfer.clone(), Duration::from_secs(3600)));
+        tokio::task::yield_now().await;
+        sender.send_replace(Progress::Running(HEAD_LENGTH - 1));
+        tokio::task::yield_now().await;
+        assert!(!task.is_finished() && !transfer.cancelled.load(Ordering::SeqCst));
+        sender.send_replace(Progress::Running(HEAD_LENGTH));
+        task.await.unwrap();
+        assert!(transfer.cancelled.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn a_reader_going_beyond_the_head_keeps_the_grace_period() {
+        let (sender, receiver) = watch::channel(Progress::Running(0));
+        let transfer = Arc::new(transfer(receiver));
+        sender.send_replace(Progress::Running(HEAD_LENGTH + 1));
+        assert!(transfer.wait_for(HEAD_LENGTH + 1).await);
+        transfer.readers.fetch_sub(1, Ordering::SeqCst);
+        assert!(!transfer.only_head_wanted());
+        cancel_when_unwanted(transfer.clone(), Duration::from_millis(50)).await;
+        assert!(transfer.cancelled.load(Ordering::SeqCst));
+        // Within the grace period, a new reader prevents the cancellation.
+        let (_sender, receiver) = watch::channel(Progress::Running(10));
+        let transfer = Arc::new(self::transfer(receiver));
+        transfer.read_end.store(HEAD_LENGTH + 1, Ordering::SeqCst);
+        transfer.readers.store(0, Ordering::SeqCst);
+        let task = tokio::spawn(cancel_when_unwanted(transfer.clone(), Duration::from_millis(100)));
+        transfer.readers.fetch_add(1, Ordering::SeqCst);
+        task.await.unwrap();
+        assert!(!transfer.cancelled.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn a_second_reader_prevents_the_early_cancellation() {
+        let (sender, receiver) = watch::channel(Progress::Running(0));
+        let transfer = Arc::new(transfer(receiver));
+        transfer.readers.store(0, Ordering::SeqCst);
+        let task = tokio::spawn(cancel_when_unwanted(transfer.clone(), Duration::from_secs(3600)));
+        tokio::task::yield_now().await;
+        // Another handle joins the download while the head is being written.
+        transfer.readers.fetch_add(1, Ordering::SeqCst);
+        sender.send_replace(Progress::Running(HEAD_LENGTH));
+        task.await.unwrap();
+        assert!(!transfer.cancelled.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn a_finished_download_is_not_cancelled() {
+        let (sender, receiver) = watch::channel(Progress::Running(0));
+        let transfer = Arc::new(transfer(receiver));
+        transfer.readers.store(0, Ordering::SeqCst);
+        let task = tokio::spawn(cancel_when_unwanted(transfer.clone(), Duration::from_secs(3600)));
+        tokio::task::yield_now().await;
+        sender.send_replace(Progress::Done);
+        task.await.unwrap();
+        assert!(!transfer.cancelled.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn wait_for_records_the_furthest_range() {
+        let (_sender, receiver) = watch::channel(Progress::Done);
+        let transfer = transfer(receiver);
+        transfer.wait_for(100).await;
+        transfer.wait_for(50).await;
+        assert_eq!(transfer.read_end.load(Ordering::SeqCst), 100);
     }
 
     #[tokio::test]
