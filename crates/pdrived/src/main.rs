@@ -185,8 +185,14 @@ fn mount(drive: &Arc<Drive>) -> Result<fuser::Session<DriveFs>> {
     let target = &drive.mount_target;
     mountpoint::prepare_dir(target)?;
     let mut config = Config::default();
+    // The file system type is "fuse.s3fs" (source still "pdrive"): COSMIC Files only treats a
+    // fixed list of mount types as remote, and without that it reads the content of every file
+    // (type sniffing) and lists every sub-folder (item counts) one after the other, which
+    // downloads files. "fuse.s3fs" is on that list and has no special handling elsewhere: GLib
+    // (is_remote_fs_type), KIO (any "fuse.*" not on /dev/ is already remote), Solid and libmount
+    // do not know it. Remove this if COSMIC Files detects these mounts differently one day.
     config.mount_options =
-        vec![MountOption::FSName("pdrive".into()), MountOption::Subtype("pdrive".into()), MountOption::NoAtime, MountOption::DefaultPermissions];
+        vec![MountOption::FSName("pdrive".into()), MountOption::Subtype("s3fs".into()), MountOption::NoAtime, MountOption::DefaultPermissions];
     let session = fuser::Session::new(DriveFs::new(drive.clone(), tokio::runtime::Handle::current()), target, &config)
         .with_context(|| format!("cannot mount on {}", target.display()))?;
     drive.set_session(Some(session.notifier()));

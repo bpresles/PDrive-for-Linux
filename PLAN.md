@@ -182,6 +182,10 @@ Plan : ajouter Dolphin (KDE) et COSMIC Files à Nautilus, sans changer le daemon
 - Limites : pas d'emblèmes dans COSMIC Files (aucune API d'extension) et ses deux actions apparaissent sur tous les fichiers ; Nemo, Thunar et Caja non traités ; les paquets ne nettoient pas les fichiers de configuration de l'utilisateur à la désinstallation.
 - [ ] À tester à la main : COSMIC (favori, actions, notification hors drive, interrupteur), session KDE réelle (emblèmes, menus, entrée dans Emplacements, pas de second volume dans « Périphériques », icônes `emblem-pdrive-*` avec le thème Breeze), changement d'environnement sans réinstaller, installation du paquet sur une machine GNOME seule (ni KF6 ni Qt6 tirés).
 
+### Performances avec COSMIC Files (13/11/2026)
+
+- [x] Type de montage `fuse.s3fs` (source toujours `pdrive`) : COSMIC Files ne traite comme distants que certains types de montage et lisait donc chaque fichier (détection du type, téléchargement complet) et chaque sous-dossier (comptage des éléments) en séquence. Nautilus, Dolphin, GIO, KIO et Solid ne traitent pas ce type autrement. À retirer si COSMIC Files détecte un jour ces montages autrement.
+
 ## 3. Autres pistes (backlog)
 
 - [ ] Fichiers « Partagés avec moi » (SDK : `EnumerateSharedWithMeNodeUids`), sous un sous-dossier dédié.

@@ -108,7 +108,9 @@ flowchart LR
 - **`pdrived`** mounts the drive with FUSE in a hidden directory
   (`~/.local/share/pdrive/.mount`, ignored by GLib and gvfs so that the sidebar shows a single
   entry), and `~/ProtonDrive` is a symbolic link to it. It owns the content cache, the upload
-  journal, the thumbnails and the D-Bus service.
+  journal, the thumbnails and the D-Bus service. The file system type is `fuse.s3fs` (the source
+  stays `pdrive`): COSMIC Files only treats a fixed list of mount types as remote, and otherwise
+  reads every file to guess its type, which downloads it.
 - **D-Bus** (session bus, name `io.github.bpresles.PDrive`): interface
   `io.github.bpresles.PDrive1` (per-file state, offline pinning, account, quota, recent
   activity, mount / unmount) and the CloudProviders objects declared in
