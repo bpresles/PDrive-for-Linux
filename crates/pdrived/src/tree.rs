@@ -140,6 +140,12 @@ impl Tree {
         }
     }
 
+    /// Sub-folders of a loaded folder whose own listing is not loaded yet.
+    pub fn unloaded_subfolders(&self, ino: u64) -> Vec<u64> {
+        let children = self.children(ino).unwrap_or_default();
+        children.iter().copied().filter(|c| matches!(self.entries[c].kind, EntryKind::Folder { children: None })).collect()
+    }
+
     pub fn is_loaded(&self, ino: u64) -> bool {
         self.children(ino).is_some()
     }
@@ -398,6 +404,19 @@ mod tests {
             kind: NodeKind::File { size: 10, revision_uid: revision.into(), has_thumbnail: false },
             mtime: mtime(2),
         }
+    }
+
+    #[test]
+    fn unloaded_subfolders_lists_the_folders_without_listing() {
+        let mut tree = tree_with(vec![folder("a", "a"), folder("b", "b"), file("f", "f", "r")]);
+        let a = tree.ino_of("a").unwrap();
+        let b = tree.ino_of("b").unwrap();
+        assert_eq!(tree.unloaded_subfolders(ROOT_INO), vec![a, b]);
+        tree.set_children(a, vec![]);
+        assert_eq!(tree.unloaded_subfolders(ROOT_INO), vec![b]);
+        // Not loaded itself, or not a folder: nothing.
+        assert!(tree.unloaded_subfolders(b).is_empty());
+        assert!(tree.unloaded_subfolders(tree.ino_of("f").unwrap()).is_empty());
     }
 
     fn tree_with(nodes: Vec<NodeInfo>) -> Tree {

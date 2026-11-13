@@ -188,6 +188,7 @@ Plan : ajouter Dolphin (KDE) et COSMIC Files à Nautilus, sans changer le daemon
 - [x] Tête de fichier gardée en cache portée de 16 à 32 Kio (`xdg-mime` lit jusqu'à 18 730 octets, GIO 16 Kio) ; les anciennes têtes de 16 Kio restent servies pour ce qu'elles couvrent, une lecture plus longue lance le téléchargement comme avant.
 - [x] Un lecteur qui ferme le fichier sans avoir lu au-delà de la tête n'attend plus les 20 s : le téléchargement est annulé dès que la tête est écrite (le premier bloc chiffré, 4 Mio au plus, reste téléchargé). Les lectures réelles gardent le délai de 20 s.
 - [x] Lecture anticipée du noyau limitée à la longueur de la tête (`max_readahead`) : avec la fenêtre par défaut, une lecture de 18 730 octets devenait une requête de 64 Kio, au-delà de la tête, donc un téléchargement complet. Raisonnement d'après le code du noyau, non mesuré sur la machine.
+- [x] Préchargement des sous-dossiers : quand un dossier est listé, ses sous-dossiers non encore chargés sont listés en arrière-plan (un seul niveau, 4 requêtes simultanées au plus). Un seul listage par dossier, déclenché par l'utilisateur, jamais répété (la suite vient des événements Drive) ; une demande pendant un listage en cours l'attend. Les miniatures des dossiers préchargés ne sont récupérées qu'à l'ouverture du dossier, pour n'ajouter ni requête ni écriture dans le cache de miniatures.
 
 ## 3. Autres pistes (backlog)
 

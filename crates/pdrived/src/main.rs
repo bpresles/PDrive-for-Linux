@@ -21,6 +21,7 @@ mod content;
 mod dbus;
 mod drive;
 mod fs;
+mod listing;
 mod mountpoint;
 mod pins;
 mod replay;

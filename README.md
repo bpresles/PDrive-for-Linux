@@ -279,6 +279,9 @@ Without a journal, the log is `$XDG_STATE_HOME/pdrive/pdrive.log` (by default
 - File permissions and a modification date alone are not kept (Proton Drive does not store them).
 - Files "Shared with me" and Photos are not handled.
 - `O_NOATIME` is refused on files that are not in the cache.
+- Opening a folder also lists its sub-folders in the background (one level, a few requests at a
+  time), and the first 32 KiB of a file read by a file manager to guess its type are kept in the
+  cache: the rest of a file is only downloaded if something reads further.
 - Deleting a file moves it directly to the Proton trash, not to the Nautilus trash.
 - Rendering on KDE and GNOME, and the translated Nautilus and Dolphin menus, still need more real-world testing.
 - COSMIC Files shows no state emblems (no extension API), and its two PDrive actions appear on every
