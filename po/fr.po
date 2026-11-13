@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pdrive\n"
 "Report-Msgid-Bugs-To: https://github.com/bpresles/PDrive-for-Linux/issues\n"
-"POT-Creation-Date: 2026-11-04 21:35+0100\n"
+"POT-Creation-Date: 2026-11-06 13:48+0100\n"
 "PO-Revision-Date: 2026-10-28 22:02+0100\n"
 "Last-Translator: PDrive for Linux authors\n"
 "Language-Team: French\n"
@@ -347,6 +347,22 @@ msgid "{} day ago"
 msgid_plural "{} days ago"
 msgstr[0] "Il y a {} jour"
 msgstr[1] "Il y a {} jours"
+
+#: crates/pdrive/src/offline.rs:52
+msgid "Cannot reach the session bus"
+msgstr "Bus de session inaccessible"
+
+#: crates/pdrive/src/offline.rs:57
+msgid "PDrive is not running. Start it first."
+msgstr "PDrive n’est pas lancé. Démarrez-le d’abord."
+
+#: crates/pdrive/src/offline.rs:65
+msgid "Ignored, not in Proton Drive"
+msgstr "Ignoré, hors de Proton Drive"
+
+#: crates/pdrive/src/offline.rs:68
+msgid "These files are not in Proton Drive"
+msgstr "Ces fichiers ne sont pas dans Proton Drive"
 
 #: crates/pdrived/src/dbus.rs:259
 #, rust-format

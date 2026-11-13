@@ -2758,7 +2758,10 @@ name = "pdrive"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "gio",
+ "glib",
  "pdcore",
+ "pdi18n",
  "pdsdk",
  "tokio",
 ]

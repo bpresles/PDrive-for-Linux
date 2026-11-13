@@ -9,4 +9,7 @@ version.workspace = true
 pdcore = { path = "../pdcore" }
 pdsdk = { path = "../pdsdk" }
 tokio.workspace = true
+pdi18n = { path = "../pdi18n" }
 anyhow.workspace = true
+glib = "0.22"
+gio = "0.22"
