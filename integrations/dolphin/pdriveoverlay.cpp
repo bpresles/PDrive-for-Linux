@@ -3,7 +3,7 @@
 
 #include "pdriveoverlay.h"
 
-#include <KPluginFactory>
+#include <utility>
 #include <kdirnotify.h>
 
 namespace
@@ -23,6 +23,13 @@ PDriveOverlayPlugin::PDriveOverlayPlugin(QObject *parent)
     // point, so it is told to list the folder again.
     connect(m_client, &PDriveClient::mounted, this, [this]() {
         forgetEverything();
+        // What Dolphin asked for before the mount point was known.
+        const QSet<QString> waiting = std::exchange(m_waiting, {});
+        for (const QString &path : waiting) {
+            if (m_client->isInMount(path)) {
+                request(path);
+            }
+        }
         org::kde::KDirNotify::emitFilesAdded(QUrl::fromLocalFile(m_client->mountPoint()));
     });
     connect(m_client, &PDriveClient::unmounted, this, &PDriveOverlayPlugin::forgetEverything);
@@ -55,6 +62,13 @@ QStringList PDriveOverlayPlugin::overlaysForStatus(const QString &status)
 
 QStringList PDriveOverlayPlugin::getOverlays(const QUrl &url)
 {
+    if (!m_client->isReady()) {
+        // Not known yet whether the file is in the drive: remembered until it is.
+        if (url.isLocalFile() && m_waiting.size() < MaxCacheEntries) {
+            m_waiting.insert(url.toLocalFile());
+        }
+        return {};
+    }
     if (!m_client->isInMount(url)) {
         return {};
     }
@@ -108,7 +122,3 @@ void PDriveOverlayPlugin::forgetEverything()
     m_queue.clear();
     m_pending.clear();
 }
-
-K_PLUGIN_CLASS_WITH_JSON(PDriveOverlayPlugin, "pdriveoverlay.json")
-
-#include "pdriveoverlay.moc"
