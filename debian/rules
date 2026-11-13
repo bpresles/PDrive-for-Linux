@@ -10,7 +10,10 @@ PKG      := pdrive-for-linux
 APP_ID    := io.github.bpresles.PDrive.App
 CLOUD_INI := io.github.bpresles.PDrive.ini
 LIBDIR   := /usr/lib/$(DEB_HOST_MULTIARCH)/pdrive
-EXTDIR   := $(shell pkg-config --variable=extensiondir libnautilus-extension-4)
+# File manager plugins (Nautilus extension, Dolphin plugins). dh_shlibdeps ignores them: they must
+# not make the package depend on the libraries of their file manager (KF6 for a GNOME user,
+# libnautilus-extension for a KDE user); the file manager brings them.
+PLUGINS  := libpdrive-nautilus.so pdriveoverlay.so pdriveactions.so
 export CARGO_HOME := $(CURDIR)/debian/cargo-home
 # Native libraries of the build architecture (build.rs picks the same directory by target arch).
 NATIVE_RID := linux-$(if $(filter arm64,$(DEB_HOST_ARCH)),arm64,x64)
@@ -32,6 +35,9 @@ override_dh_auto_configure:
 override_dh_auto_build:
 	cargo build --release --frozen --offline -p pdrived -p pdrive -p pdrive-app
 	CFLAGS="$(CFLAGS) $(CPPFLAGS)" $(MAKE) -C extension LOCALEDIR=/usr/share/locale
+	CXXFLAGS="$(CXXFLAGS) $(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" cmake -S integrations/dolphin -B debian/build-dolphin \
+	  -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DKDE_INSTALL_LIBDIR=lib/$(DEB_HOST_MULTIARCH)
+	cmake --build debian/build-dolphin --parallel
 	while read -r lang; do \
 	  case "$$lang" in ''|\#*) continue;; esac; \
 	  mkdir -p debian/locale/$$lang/LC_MESSAGES; \
@@ -40,6 +46,11 @@ override_dh_auto_build:
 
 override_dh_auto_test:
 	desktop-file-validate packaging/$(APP_ID).desktop
+	# The Dolphin plugins: no /usr/local, no build directory.
+	for p in $$(find debian/build-dolphin/bin -name '*.so'); do \
+	  ! grep -q /usr/local $$p || { echo "$$p refers to /usr/local" >&2; exit 1; }; \
+	  ! grep -q "$(CURDIR)" $$p || { echo "$$p refers to the build tree" >&2; exit 1; }; \
+	done
 	# The binaries must not refer to the build tree (the SDK loads libproton_crypto.so from that path).
 	for b in pdrive pdrived; do \
 	  ! grep -q "$(CURDIR)/native" target/release/$$b || { echo "$$b refers to the build tree" >&2; exit 1; }; \
@@ -50,6 +61,7 @@ override_dh_auto_install:
 	install -Dpm0755 target/release/pdrive target/release/pdrived target/release/pdrive-app -t debian/$(PKG)/usr/bin
 	install -Dpm0644 native/$(NATIVE_RID)/libproton_drive_sdk.so native/$(NATIVE_RID)/libproton_crypto.so -t debian/$(PKG)$(LIBDIR)
 	$(MAKE) -C extension install DESTDIR=$(CURDIR)/debian/$(PKG) LOCALEDIR=/usr/share/locale
+	DESTDIR=$(CURDIR)/debian/$(PKG) cmake --install debian/build-dolphin
 	install -Dpm0644 packaging/$(CLOUD_INI) -t debian/$(PKG)/usr/share/cloud-providers
 	install -Dpm0644 packaging/$(APP_ID).desktop -t debian/$(PKG)/usr/share/applications
 	cd packaging/icons/hicolor && find . -name '*.svg' -exec install -Dpm0644 '{}' $(CURDIR)/debian/$(PKG)/usr/share/icons/hicolor/'{}' ';'
@@ -60,9 +72,9 @@ override_dh_makeshlibs:
 	dh_makeshlibs -n
 
 override_dh_shlibdeps:
-	dh_shlibdeps -- -l$(CURDIR)/debian/$(PKG)$(LIBDIR)
+	dh_shlibdeps $(addprefix -X,$(PLUGINS)) -- -l$(CURDIR)/debian/$(PKG)$(LIBDIR)
 
 # dh_clean would delete vendor/*/Cargo.toml.orig, which the vendored checksums reference.
 override_dh_clean:
 	dh_clean -X.orig
-	rm -rf debian/locale debian/cargo-home
+	rm -rf debian/locale debian/cargo-home debian/build-dolphin

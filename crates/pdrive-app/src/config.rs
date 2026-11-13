@@ -26,10 +26,18 @@ fn home() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default()
 }
 
-fn config_home() -> PathBuf {
+pub fn config_home() -> PathBuf {
     match std::env::var_os("XDG_CONFIG_HOME") {
         Some(dir) if !dir.is_empty() && Path::new(&dir).is_absolute() => PathBuf::from(dir),
         _ => home().join(".config"),
+    }
+}
+
+/// `$XDG_DATA_HOME`, `~/.local/share` by default.
+pub fn data_home() -> PathBuf {
+    match std::env::var_os("XDG_DATA_HOME") {
+        Some(dir) if !dir.is_empty() && Path::new(&dir).is_absolute() => PathBuf::from(dir),
+        _ => home().join(".local/share"),
     }
 }
 
@@ -98,6 +106,21 @@ fn show_window_of(document: &DocumentMut) -> bool {
 pub fn set_show_window_at_startup(show: bool) -> Result<()> {
     let mut document = read_document();
     set(&mut document, "show_window_at_startup", Value::from(show));
+    write_document(&document)
+}
+
+/// Whether the drive is added to the file managers (see `integrations.rs`); on by default.
+pub fn file_manager_integration() -> bool {
+    integration_of(&read_document())
+}
+
+fn integration_of(document: &DocumentMut) -> bool {
+    document.get("file_manager_integration").and_then(|v| v.as_bool()).unwrap_or(true)
+}
+
+pub fn set_file_manager_integration(enabled: bool) -> Result<()> {
+    let mut document = read_document();
+    set(&mut document, "file_manager_integration", Value::from(enabled));
     write_document(&document)
 }
 
@@ -177,6 +200,17 @@ mod tests {
         assert!(show_window_of(&parse("show_window_at_startup = true\n")));
         // A value of the wrong type is ignored.
         assert!(show_window_of(&parse("show_window_at_startup = \"no\"\n")));
+    }
+
+    #[test]
+    fn file_manager_integration_defaults_to_true_and_reads_false() {
+        assert!(integration_of(&parse("")));
+        assert!(!integration_of(&parse("file_manager_integration = false\n")));
+        assert!(integration_of(&parse("file_manager_integration = \"no\"\n")));
+        let mut document = parse(COMMENTED);
+        set(&mut document, "file_manager_integration", Value::from(false));
+        assert!(document.to_string().starts_with(COMMENTED));
+        assert!(!integration_of(&parse(&document.to_string())));
     }
 
     #[test]

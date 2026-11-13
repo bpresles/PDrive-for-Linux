@@ -7,9 +7,14 @@
 //!     pdrive logout         revoke the session and remove it from the keyring
 //!     pdrive status         exit status 0 if a session is stored in the keyring, 1 otherwise
 //!
+//!     pdrive keep-offline PATH...     keep files or folders of the drive available offline
+//!     pdrive free-up-space PATH...    free the local space used by files or folders of the drive
+//!
 //! Set PDRIVE_VERBOSE=1 to log HTTP requests and SDK debug messages.
 
 use std::sync::Arc;
+
+mod offline;
 
 use anyhow::{Result, bail};
 use pdcore::config;
@@ -29,8 +34,13 @@ async fn main() -> Result<()> {
             std::process::exit(if signed_in { 0 } else { 1 });
         }
         Some("selftest") => selftest().await,
+        Some(command @ ("keep-offline" | "free-up-space")) => {
+            pdi18n::init();
+            let action = if command == "keep-offline" { offline::Action::KeepOffline } else { offline::Action::FreeUpSpace };
+            std::process::exit(offline::run(action, &args[1..]));
+        }
         _ => {
-            eprintln!("usage: pdrive login | ls [PATH] | logout | status | selftest");
+            eprintln!("usage: pdrive login | ls [PATH] | logout | status | keep-offline PATH... | free-up-space PATH... | selftest");
             std::process::exit(2);
         }
     }

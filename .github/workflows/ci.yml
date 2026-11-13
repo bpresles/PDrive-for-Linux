@@ -1,5 +1,5 @@
-# Pull requests and branch pushes: formatting, lints, tests, Nautilus extension.
-# Jobs: Nautilus extension and packaging checks; native libraries (.NET NativeAOT + Rust, cached
+# Pull requests and branch pushes: formatting, lints, tests, Nautilus extension, Dolphin plugins.
+# Jobs: Nautilus extension and packaging checks; Dolphin plugins; native libraries (.NET NativeAOT + Rust, cached
 # on the revisions pinned in scripts/build-native.sh); Rust formatting, lints and tests.
 name: ci
 on:
@@ -18,6 +18,21 @@ jobs:
       - run: desktop-file-validate packaging/io.github.bpresles.PDrive.App.desktop
       - run: for f in po/*.po; do msgfmt --check -o /dev/null "$f"; done
       - run: scripts/check-version.sh
+
+  # The Dolphin plugins need KDE Frameworks 6, which Ubuntu 24.04 does not have: Debian 13 container
+  # (6.13, the target of the DEB package; it provides KOverlayIconPlugin in KIOCore).
+  dolphin-plugin:
+    runs-on: ubuntu-24.04
+    container: docker.io/library/debian:trixie
+    steps:
+      - run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git g++ make cmake extra-cmake-modules \
+            libkf6kio-dev libkf6coreaddons-dev libkf6i18n-dev qt6-base-dev
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: cmake -S integrations/dolphin -B build-dolphin -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build-dolphin
+      - run: ls -l build-dolphin/bin/kf6/overlayicon/pdriveoverlay.so build-dolphin/bin/kf6/kfileitemaction/pdriveactions.so
 
   # The two native libraries the Rust crates link against. A cache hit (same pinned revisions,
   # runner image and .NET major version) skips the .NET build, which takes several minutes.

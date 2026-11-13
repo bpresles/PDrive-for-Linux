@@ -1,0 +1,12 @@
+{
+    "KPlugin": {
+        "Description": "Keep Available Offline and Free Up Space for PDrive for Linux (unofficial Proton Drive client)",
+        "Icon": "emblem-pdrive-pinned",
+        "Id": "pdriveactions",
+        "MimeTypes": [
+            "application/octet-stream",
+            "inode/directory"
+        ],
+        "Name": "PDrive for Linux actions"
+    }
+}

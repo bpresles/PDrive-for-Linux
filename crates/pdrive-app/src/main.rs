@@ -3,6 +3,7 @@
 //! PDrive for Linux desktop application.
 //!
 //!     pdrive-app [--background]
+//!     pdrive-app --remove-integrations
 //!
 //! Single instance (`io.github.bpresles.PDrive.App`) that stays alive without a window:
 //! it runs and supervises `pdrived`, shows the tray icon (StatusNotifierItem) and the status
@@ -10,10 +11,14 @@
 //! `--background` (autostart) no window is opened. Only "Quit" in the tray menu (or SIGTERM)
 //! ends it, after stopping the daemon. The logs of the daemon go to this program's standard
 //! error output, which `logs.rs` sends to the journal when it would be lost.
+//!
+//! `--remove-integrations` removes the entries added to the file managers (`integrations.rs`)
+//! and exits; the uninstall script runs it.
 
 mod about;
 mod config;
 mod daemon;
+mod integrations;
 mod logs;
 mod settings;
 mod supervisor;
@@ -82,6 +87,10 @@ fn terminate_signals() -> async_channel::Receiver<()> {
 }
 
 fn main() -> glib::ExitCode {
+    if std::env::args().any(|a| a == "--remove-integrations") {
+        pdi18n::init();
+        return if integrations::remove_all() { glib::ExitCode::SUCCESS } else { glib::ExitCode::FAILURE };
+    }
     logs::init();
     let terminate = terminate_signals();
     pdi18n::init();
@@ -184,6 +193,13 @@ impl App {
         me.add_actions();
         me.watch_names();
         me.supervisor.ensure_running();
+        // Decided by what is installed, at every start: a file manager installed since is
+        // taken into account.
+        glib::spawn_future_local(async {
+            if let Ok(errors) = gio::spawn_blocking(integrations::apply_from_settings).await {
+                integrations::report(errors);
+            }
+        });
 
         let weak = Rc::downgrade(&me);
         glib::spawn_future_local(async move {
