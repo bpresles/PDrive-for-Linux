@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pdrive\n"
 "Report-Msgid-Bugs-To: https://github.com/bpresles/PDrive-for-Linux/issues\n"
-"POT-Creation-Date: 2026-11-04 21:35+0100\n"
+"POT-Creation-Date: 2026-11-13 19:36+0100\n"
 "PO-Revision-Date: 2026-10-28 22:02+0100\n"
 "Last-Translator: PDrive for Linux authors\n"
 "Language-Team: French\n"
@@ -30,29 +30,37 @@ msgstr "Version {}"
 msgid "About"
 msgstr "À propos"
 
-#: crates/pdrive-app/src/main.rs:466
+#: crates/pdrive-app/src/integrations.rs:77
+msgid "PDrive: Free Up Space"
+msgstr "PDrive : libérer de l’espace"
+
+#: crates/pdrive-app/src/integrations.rs:77
+msgid "PDrive: Keep Available Offline"
+msgstr "PDrive : garder disponible hors ligne"
+
+#: crates/pdrive-app/src/main.rs:482
 msgid "Sign-in failed"
 msgstr "Échec de la connexion"
 
-#: crates/pdrive-app/src/main.rs:466
+#: crates/pdrive-app/src/main.rs:482
 msgid "The sign-in did not complete. Try again."
 msgstr "La connexion n’a pas abouti. Réessayez."
 
-#: crates/pdrive-app/src/main.rs:480
+#: crates/pdrive-app/src/main.rs:496
 msgid "Sign-out failed"
 msgstr "Échec de la déconnexion"
 
-#: crates/pdrive-app/src/main.rs:480
+#: crates/pdrive-app/src/main.rs:496
 msgid "The session could not be removed. See the logs of the application."
 msgstr ""
 "La session n’a pas pu être supprimée. Consultez les journaux de "
 "l’application."
 
-#: crates/pdrive-app/src/main.rs:494
+#: crates/pdrive-app/src/main.rs:510
 msgid "Start PDrive when you log in?"
 msgstr "Lancer PDrive à l’ouverture de session ?"
 
-#: crates/pdrive-app/src/main.rs:495
+#: crates/pdrive-app/src/main.rs:511
 msgid ""
 "The Proton Drive folder is then mounted automatically. You can change this "
 "in the settings."
@@ -60,105 +68,120 @@ msgstr ""
 "Le dossier Proton Drive est alors monté automatiquement. Vous pouvez "
 "modifier ce choix dans les réglages."
 
-#: crates/pdrive-app/src/main.rs:497
+#: crates/pdrive-app/src/main.rs:513
 msgid "Not now"
 msgstr "Pas maintenant"
 
-#: crates/pdrive-app/src/main.rs:497
+#: crates/pdrive-app/src/main.rs:513
 msgid "Start at login"
 msgstr "Lancer à l’ouverture de session"
 
-#: crates/pdrive-app/src/main.rs:526
+#: crates/pdrive-app/src/main.rs:542
 msgid "You already have the latest version"
 msgstr "Vous avez déjà la dernière version"
 
-#: crates/pdrive-app/src/main.rs:531
+#: crates/pdrive-app/src/main.rs:547
 msgid "Cannot check for updates"
 msgstr "Impossible de rechercher les mises à jour"
 
-#: crates/pdrive-app/src/main.rs:541
+#: crates/pdrive-app/src/main.rs:557
 #, rust-format
 msgid "New version is available: v{}"
 msgstr "Une nouvelle version est disponible : v{}"
 
-#: crates/pdrive-app/src/main.rs:542
+#: crates/pdrive-app/src/main.rs:558
 msgid "Ignore"
 msgstr "Ignorer"
 
-#: crates/pdrive-app/src/main.rs:542
+#: crates/pdrive-app/src/main.rs:558
 msgid "Update"
 msgstr "Mettre à jour"
 
-#: crates/pdrive-app/src/main.rs:555 crates/pdrive-app/src/main.rs:561
+#: crates/pdrive-app/src/main.rs:571 crates/pdrive-app/src/main.rs:577
 msgid "OK"
 msgstr "OK"
 
-#: crates/pdrive-app/src/settings.rs:29 crates/pdrive-app/src/tray.rs:111
+#: crates/pdrive-app/src/settings.rs:30 crates/pdrive-app/src/tray.rs:111
 #: crates/pdrive-app/src/window.rs:72
 msgid "Settings"
 msgstr "Réglages"
 
-#: crates/pdrive-app/src/settings.rs:33
+#: crates/pdrive-app/src/settings.rs:34
 msgid "Synchronization"
 msgstr "Synchronisation"
 
-#: crates/pdrive-app/src/settings.rs:34
+#: crates/pdrive-app/src/settings.rs:35
 msgid "Changes apply when the dialog is closed, restarting the service."
 msgstr ""
 "Les modifications s’appliquent à la fermeture de la fenêtre, avec un "
 "redémarrage du service."
 
-#: crates/pdrive-app/src/settings.rs:36
+#: crates/pdrive-app/src/settings.rs:37
 msgid "Mount point"
 msgstr "Point de montage"
 
-#: crates/pdrive-app/src/settings.rs:38
+#: crates/pdrive-app/src/settings.rs:39
 msgid "Cache size (GiB)"
 msgstr "Taille du cache (Gio)"
 
-#: crates/pdrive-app/src/settings.rs:46
+#: crates/pdrive-app/src/settings.rs:47
 msgid "Start when I log in"
 msgstr "Lancer à l’ouverture de session"
 
-#: crates/pdrive-app/src/settings.rs:50 crates/pdrive-app/src/settings.rs:58
+#: crates/pdrive-app/src/settings.rs:51 crates/pdrive-app/src/settings.rs:59
 msgid "Cannot change the startup setting"
 msgstr "Impossible de modifier le réglage de démarrage"
 
-#: crates/pdrive-app/src/settings.rs:54
+#: crates/pdrive-app/src/settings.rs:55
 msgid "Show the status window at startup"
 msgstr "Ouvrir la fenêtre d’état au démarrage"
 
-#: crates/pdrive-app/src/settings.rs:65
+#: crates/pdrive-app/src/settings.rs:64
+msgid "Add PDrive to the file managers (sidebar, menus)"
+msgstr "Ajouter PDrive aux gestionnaires de fichiers (barre latérale, menus)"
+
+#: crates/pdrive-app/src/settings.rs:68
+msgid "Cannot change the file manager setting"
+msgstr "Impossible de modifier le réglage des gestionnaires de fichiers"
+
+#: crates/pdrive-app/src/settings.rs:73
+msgid ""
+"Some file managers could not be updated. See the logs of the application."
+msgstr ""
+"Certains gestionnaires de fichiers n’ont pas pu être mis à jour. Consultez "
+"les journaux de l’application."
+
+#: crates/pdrive-app/src/settings.rs:81
 #, rust-format
 msgid "Installed version: {}"
 msgstr "Version installée : {}"
 
-#: crates/pdrive-app/src/settings.rs:65
+#: crates/pdrive-app/src/settings.rs:81
 msgid "Updates"
 msgstr "Mises à jour"
 
-#: crates/pdrive-app/src/settings.rs:69
+#: crates/pdrive-app/src/settings.rs:85
 #, rust-format
 msgid "New version available: v{}"
 msgstr "Nouvelle version disponible : v{}"
 
-#: crates/pdrive-app/src/settings.rs:74 crates/pdrive-app/src/tray.rs:104
+#: crates/pdrive-app/src/settings.rs:90 crates/pdrive-app/src/tray.rs:104
 msgid "Check for update…"
 msgstr "Rechercher une mise à jour…"
 
-#: crates/pdrive-app/src/settings.rs:82
+#: crates/pdrive-app/src/settings.rs:98
 msgid "Account"
 msgstr "Compte"
 
-#: crates/pdrive-app/src/settings.rs:84 crates/pdrive-app/src/settings.rs:92
+#: crates/pdrive-app/src/settings.rs:100 crates/pdrive-app/src/settings.rs:108
 msgid "Sign out"
 msgstr "Se déconnecter"
 
-#: crates/pdrive-app/src/settings.rs:89
+#: crates/pdrive-app/src/settings.rs:105
 msgid "Sign out?"
 msgstr "Se déconnecter ?"
 
-#: crates/pdrive-app/src/settings.rs:90
+#: crates/pdrive-app/src/settings.rs:106
 msgid ""
 "The service is stopped and the session is removed from this computer. "
 "Pending uploads are resumed after the next sign-in."
@@ -166,7 +189,7 @@ msgstr ""
 "Le service est arrêté et la session est supprimée de cet ordinateur. Les "
 "envois en attente reprendront après la prochaine connexion."
 
-#: crates/pdrive-app/src/settings.rs:92
+#: crates/pdrive-app/src/settings.rs:108
 msgid "Cancel"
 msgstr "Annuler"
 
@@ -348,6 +371,22 @@ msgid_plural "{} days ago"
 msgstr[0] "Il y a {} jour"
 msgstr[1] "Il y a {} jours"
 
+#: crates/pdrive/src/offline.rs:52
+msgid "Cannot reach the session bus"
+msgstr "Bus de session inaccessible"
+
+#: crates/pdrive/src/offline.rs:57
+msgid "PDrive is not running. Start it first."
+msgstr "PDrive n’est pas lancé. Démarrez-le d’abord."
+
+#: crates/pdrive/src/offline.rs:65
+msgid "Ignored, not in Proton Drive"
+msgstr "Ignoré, hors de Proton Drive"
+
+#: crates/pdrive/src/offline.rs:68
+msgid "These files are not in Proton Drive"
+msgstr "Ces fichiers ne sont pas dans Proton Drive"
+
 #: crates/pdrived/src/dbus.rs:259
 #, rust-format
 msgid "{} (unofficial client) · {}"
@@ -379,18 +418,18 @@ msgstr "Afficher l’état"
 msgid "Open in the browser"
 msgstr "Ouvrir dans le navigateur"
 
-#: extension/pdrive-nautilus.c:333
+#: extension/pdrive-nautilus.c:333 integrations/dolphin/pdriveactions.cpp:38
 msgid "Keep Available Offline"
 msgstr "Garder disponible hors ligne"
 
-#: extension/pdrive-nautilus.c:334
+#: extension/pdrive-nautilus.c:334 integrations/dolphin/pdriveactions.cpp:39
 msgid "Download and keep available without network"
 msgstr "Télécharger et garder disponible sans réseau"
 
-#: extension/pdrive-nautilus.c:336
+#: extension/pdrive-nautilus.c:336 integrations/dolphin/pdriveactions.cpp:44
 msgid "Free Up Space"
 msgstr "Libérer de l’espace"
 
-#: extension/pdrive-nautilus.c:337
+#: extension/pdrive-nautilus.c:337 integrations/dolphin/pdriveactions.cpp:45
 msgid "Remove the downloaded copy, keeping it in the cloud"
 msgstr "Supprimer la copie téléchargée, en la conservant dans le cloud"

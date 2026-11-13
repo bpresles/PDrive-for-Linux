@@ -9,6 +9,9 @@
 //! cache_size_gib = 10
 //! # Whether launching pdrive-app opens its status window (read by pdrive-app only).
 //! show_window_at_startup = true
+//! # Whether pdrive-app adds the drive to the file managers: Dolphin places, COSMIC Files
+//! # favorite and actions (read by pdrive-app only).
+//! file_manager_integration = true
 //! ```
 
 use std::path::{Path, PathBuf};
@@ -39,11 +42,14 @@ pub struct Settings {
     /// Setting of pdrive-app, accepted here as the file is shared.
     #[allow(dead_code)]
     pub show_window_at_startup: bool,
+    /// Setting of pdrive-app, accepted here as the file is shared.
+    #[allow(dead_code)]
+    pub file_manager_integration: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { mountpoint: "~/ProtonDrive".into(), cache_size_gib: 10.0, show_window_at_startup: true }
+        Self { mountpoint: "~/ProtonDrive".into(), cache_size_gib: 10.0, show_window_at_startup: true, file_manager_integration: true }
     }
 }
 
@@ -92,15 +98,17 @@ mod tests {
         assert_eq!(settings.mountpoint, "~/ProtonDrive");
         assert_eq!(settings.cache_size_gib, 10.0);
         assert!(settings.show_window_at_startup);
+        assert!(settings.file_manager_integration);
     }
 
     #[test]
     fn documented_example_parses() {
-        let text = "# comment\nmountpoint = \"/mnt/drive\"\ncache_size_gib = 2.5\nshow_window_at_startup = false\n";
+        let text = "# comment\nmountpoint = \"/mnt/drive\"\ncache_size_gib = 2.5\nshow_window_at_startup = false\nfile_manager_integration = false\n";
         let settings: Settings = toml::from_str(text).unwrap();
         assert_eq!(settings.mountpoint, "/mnt/drive");
         assert_eq!(settings.cache_size_gib, 2.5);
         assert!(!settings.show_window_at_startup);
+        assert!(!settings.file_manager_integration);
         // An integer is accepted for the size, as written by the application.
         assert_eq!(toml::from_str::<Settings>("cache_size_gib = 10").unwrap().cache_size_gib, 10.0);
     }

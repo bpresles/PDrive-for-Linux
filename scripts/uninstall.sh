@@ -8,6 +8,8 @@
 # Kept: the session in the keyring, the settings (~/.config/pdrive), the cache and pending
 # uploads (~/.cache/pdrive), the offline choices (~/.local/share/pdrive) and the ~/ProtonDrive
 # link, which a package installation reuses; see the end of this script to remove them.
+# The entries that pdrive-app added to the file managers of the user (Dolphin places, COSMIC
+# Files favorite and actions) are removed with pdrive-app --remove-integrations.
 # Files installed by an RPM or DEB package are left alone.
 set -euo pipefail
 
@@ -54,6 +56,11 @@ for unit in pdrive.service nautilus-drive-poc.service; do
 done
 [[ -n "${UNITS_REMOVED:-}" ]] && systemctl --user daemon-reload
 
+# Entries added to the file managers: with the binary of this installation, before it goes.
+if [[ -x "$BIN_DIR/pdrive-app" ]]; then
+    "$BIN_DIR/pdrive-app" --remove-integrations || echo "Could not remove all the file manager entries." >&2
+fi
+
 # User installation (install.sh).
 rm -f "$BIN_DIR"/{pdrive-app,pdrived,pdrive,pdfs,pdpoc}
 rm -rf "$HOME/.local/lib/pdrive" "$HOME/.local/lib/nautilus-drive-poc"
@@ -68,13 +75,20 @@ rm -f "$DATA_HOME"/locale/*/LC_MESSAGES/pdrive.mo
 rm -f "$DATA_HOME"/man/man1/{pdrive,pdrived,pdrive-app}.1
 update-desktop-database -q "$DATA_HOME/applications" 2>/dev/null || true
 
-# System installation (install-system.sh): the Nautilus extension, unless a package owns it.
-extension_dirs=("$(pkg-config --variable=extensiondir libnautilus-extension-4 2>/dev/null || true)" /usr/lib64/nautilus/extensions-4 /usr/lib/*/nautilus/extensions-4)
+# System installation (install-system.sh): the Nautilus extension and the Dolphin plugins, unless
+# a package owns them.
+qt_plugins="$( (qtpaths6 --query QT_INSTALL_PLUGINS || qmake6 -query QT_INSTALL_PLUGINS) 2>/dev/null | head -n1 || true)"
+candidates=()
+for dir in "$(pkg-config --variable=extensiondir libnautilus-extension-4 2>/dev/null || true)" /usr/lib64/nautilus/extensions-4 /usr/lib/*/nautilus/extensions-4; do
+    [[ -n "$dir" ]] && candidates+=("$dir/libpdrive-nautilus.so")
+done
+for dir in "$qt_plugins" /usr/lib64/qt6/plugins /usr/lib/qt6/plugins /usr/lib/*/qt6/plugins; do
+    [[ -n "$dir" ]] && candidates+=("$dir/kf6/overlayicon/pdriveoverlay.so" "$dir/kf6/kfileitemaction/pdriveactions.so")
+done
 system_files=()
-for dir in "${extension_dirs[@]}"; do
-    file="$dir/libpdrive-nautilus.so"
-    [[ -n "$dir" && -f "$file" ]] || continue
-    if rpm -qf "$file" >/dev/null 2>&1 || dpkg -S "$file" >/dev/null 2>&1; then
+for file in "${candidates[@]}"; do
+    [[ -f "$file" ]] || continue
+    if rpm -qf "$file" >/dev/null 2>&1 || dpkg -S "$file" >/dev/null 2>&1 || pacman -Qo "$file" >/dev/null 2>&1; then
         echo "Kept $file: it belongs to an installed package."
         continue
     fi
@@ -90,7 +104,7 @@ fi
 
 cat <<EOF
 
-Uninstalled. Restart Nautilus to unload the extension: nautilus -q
+Uninstalled. Restart the file managers to unload the plugins: nautilus -q, and close Dolphin.
 
 Your data was kept. To remove it as well:
   pdrive logout          # before uninstalling, or with a package installation: revokes the session

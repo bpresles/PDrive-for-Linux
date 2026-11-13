@@ -11,13 +11,15 @@ cd "$ROOT"
 
 mapfile -t RUST < <(grep '\.rs$' po/POTFILES)
 mapfile -t C_FILES < <(grep '\.c$' po/POTFILES)
+mapfile -t CPP_FILES < <(grep '\.cpp$' po/POTFILES)
 COMMON=(--from-code=UTF-8 --package-name=pdrive --msgid-bugs-address=https://github.com/bpresles/PDrive-for-Linux/issues --copyright-holder="the PDrive for Linux authors" --add-comments=TRANSLATORS --sort-by-file)
 
-# Rust: tr and tr_fmt (message), tr_n (singular, plural). C: _().
+# Rust: tr and tr_fmt (message), tr_n (singular, plural). C: _(). C++ (KDE): i18nd (domain, message).
 rm -f po/pdrive.pot
 xgettext "${COMMON[@]}" --language=Rust --keyword=tr:1 --keyword=tr_fmt:1 --keyword=tr_n:1,2 \
     --output=po/pdrive.pot "${RUST[@]}"
 xgettext "${COMMON[@]}" --language=C --keyword=_ --join-existing --output=po/pdrive.pot "${C_FILES[@]}"
+xgettext "${COMMON[@]}" --language=C++ --keyword=i18nd:2 --join-existing --output=po/pdrive.pot "${CPP_FILES[@]}"
 
 while read -r lang; do
     [[ -z "$lang" || "$lang" == \#* ]] && continue

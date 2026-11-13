@@ -6,6 +6,7 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends build-essential debhelper dpkg-dev fakeroot gettext \
+    cmake extra-cmake-modules libkf6kio-dev libkf6coreaddons-dev libkf6i18n-dev qt6-base-dev \
     desktop-file-utils pkg-config libnautilus-extension-dev libgtk-4-dev libadwaita-1-dev libglib2.0-dev \
     xz-utils lintian ca-certificates curl cargo rustc
 DPKG_FLAGS=()

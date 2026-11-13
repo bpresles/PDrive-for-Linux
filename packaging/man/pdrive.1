@@ -1,6 +1,6 @@
 .\" SPDX-License-Identifier: GPL-3.0-or-later
 .\" Copyright (C) 2026 Bertrand Presles
-.TH PDRIVE 1 "October 2026" "PDrive for Linux" "User Commands"
+.TH PDRIVE 1 "November 2026" "PDrive for Linux" "User Commands"
 .SH NAME
 pdrive \- command-line tool of PDrive for Linux, an unofficial Proton Drive client
 .SH SYNOPSIS
@@ -9,6 +9,9 @@ pdrive \- command-line tool of PDrive for Linux, an unofficial Proton Drive clie
 .br
 .B pdrive ls
 .RI [ PATH ]
+.br
+.BR pdrive " " keep\-offline " | " free\-up\-space
+.IR PATH ...
 .SH DESCRIPTION
 .B pdrive
 signs in to and out of a Proton account and lists folders of
@@ -43,6 +46,22 @@ Print
 .B signed in
 or
 .BR "not signed in" .
+.TP
+.BI "keep\-offline " PATH ...
+Keep the files or folders available offline (same action as the Nautilus and Dolphin
+menus). Each
+.I PATH
+must be inside the mounted drive: the others are ignored with a message.
+.TP
+.BI "free\-up\-space " PATH ...
+Free the local space used by the files or folders (they stay in the drive).
+.PP
+.RS
+Both commands talk to the running daemon. When it is not running, or when no
+.I PATH
+is in the drive, they print the reason, show a desktop notification, and exit with status 1.
+They are what the COSMIC Files context-menu actions run.
+.RE
 .TP
 .B selftest
 Check the bridge with the SDK library without network access.

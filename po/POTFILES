@@ -1,7 +1,10 @@
+crates/pdrive/src/offline.rs
 crates/pdrive-app/src/about.rs
+crates/pdrive-app/src/integrations.rs
 crates/pdrive-app/src/main.rs
 crates/pdrive-app/src/settings.rs
 crates/pdrive-app/src/tray.rs
 crates/pdrive-app/src/window.rs
 crates/pdrived/src/dbus.rs
 extension/pdrive-nautilus.c
+integrations/dolphin/pdriveactions.cpp
