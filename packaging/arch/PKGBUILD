@@ -17,7 +17,7 @@ _app_id=io.github.bpresles.PDrive.App
 _cloud_ini=io.github.bpresles.PDrive.ini
 
 pkgname=pdrive-for-linux
-pkgver=0.4.0
+pkgver=0.4.1
 pkgrel=1
 pkgdesc='Unofficial Proton Drive client for Linux (FUSE mount, file manager integration)'
 arch=(x86_64 aarch64)
