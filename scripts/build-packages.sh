@@ -10,7 +10,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib-version.sh"
 cd "$ROOT"
 
 WHAT="${1:-all}"
-RPM_IMAGE="${RPM_IMAGE:-registry.fedoraproject.org/fedora:44}"
+RPM_IMAGE="${RPM_IMAGE:-registry.fedoraproject.org/fedora:45}"
 DEB_IMAGE="${DEB_IMAGE:-docker.io/library/debian:trixie}"
 ARCH_IMAGE="${ARCH_IMAGE:-docker.io/library/archlinux:base-devel}"
 APPIMAGE_IMAGE="${APPIMAGE_IMAGE:-$DEB_IMAGE}"

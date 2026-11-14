@@ -139,7 +139,7 @@ flowchart LR
 - A Secret Service provider (for example oo7, GNOME Keyring, KeePassXC or KWallet). The
   packages do not depend on any of them: use the one your desktop already runs. With KWallet,
   the Secret Service interface (`org.freedesktop.secrets`) is provided by `ksecretd` from
-  KDE Frameworks 6.14 (Fedora 44 has 6.31). Debian 13 has `kwallet6` 6.13, whose `kwalletd6`
+  KDE Frameworks 6.14 (Fedora 45 has 6.31). Debian 13 has `kwallet6` 6.13, whose `kwalletd6`
   only offers it as an option: enable it in the KDE Wallet settings ("Use KWallet for the
   Secret Service interface") or use another provider.
 - Optional, one per file manager you want the plugins of: for the Nautilus extension, the
